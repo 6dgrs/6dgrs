@@ -1,0 +1,3026 @@
+const screens = [...document.querySelectorAll(".screen")];
+const bottomNavTargets = [
+  { label: "Home", screen: "home" },
+  { label: "Network", screen: "network-list" },
+  { label: "Chats", screen: "chats" },
+  { label: "Profile", screen: "my-profile" }
+];
+
+let tripReturnTarget = "trusted";
+let homeFilter = "all";
+let chatFilter = "all";
+let chatMode = "default";
+let verificationMethod = "qr";
+let introMethod = "mutual";
+let trustedMode = "onboarding";
+let qrReturnTarget = "home";
+let planFilter = "hosting";
+let selectedPlanStatus = "discoverable";
+let selectedPlanName = "Coffee in Shoreditch";
+let requestFilter = "intro";
+let networkFilter = "trusted";
+let selectedProfileName = "Emma Laurent";
+let verificationCountdownTimer = null;
+let homeTripDateRange = "8/11/26-15/11/26";
+let activeHomeTripId = "barcelona-nov";
+let activeHomeCity = "Barcelona";
+let activeHomeSelectorValue = "barcelona-nov";
+let tripEditorMode = "create";
+let editingTripId = null;
+let instagramAccessUnlocked = false;
+let onboardingSlide = 0;
+let onboardingTimer = null;
+let activeChatDetailMode = "default";
+let selectedChatName = "Emma Laurent";
+let selectedChatPath = "You → Laura → Emma";
+let selectedChatPreview = "Friday works. Laura vouched for you.";
+let pendingArchiveChatCard = null;
+let introThreadStarted = false;
+let introThreadLeft = false;
+const removedConnections = new Set();
+const screenHistory = [];
+const rootScreens = new Set(["welcome", "home", "network-list", "chats", "my-profile"]);
+const dirtyScreens = new Set(["basics", "profile-setup", "trip", "request-intro", "create-plan", "edit-plan", "edit-profile", "plan-chat"]);
+const backFallbacks = {
+  basics: "welcome",
+  "profile-setup": "basics",
+  trip: "trusted",
+  trusted: "profile-setup",
+  privacy: "trusted",
+  "qr-reveal": "my-profile",
+  "trusted-plans": "home",
+  "nearby-people": "home",
+  "suggested-connections": "home",
+  "all-trips": "my-profile",
+  "my-plans": "my-profile",
+  "person-trips": "profile",
+  "person-plans": "profile",
+  "create-plan": "trusted-plans",
+  "edit-plan": "my-plans",
+  "plan-detail": "trusted-plans",
+  "plan-requests": "edit-plan",
+  "plan-chat": "chats",
+  "city-mutuals": "home",
+  "network-map": "network-list",
+  "request-intro": "profile",
+  "chat-detail": "chats",
+  verify: "chat-detail",
+  unlocked: "network-list",
+  "edit-profile": "my-profile",
+  settings: "my-profile",
+  notifications: "my-profile",
+  "connection-requests": "my-profile",
+  "safety-centre": "my-profile",
+  "how-works": "my-profile",
+  profile: "home"
+};
+const trustedFriendState = {
+  used: 4,
+  launchCap: 6,
+  absoluteCap: 12,
+  verifiedMeetups: 1,
+  hostedPlans: 0,
+  vouches: 1
+};
+
+const homeTrips = [
+  { id: "barcelona-nov", city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15" },
+  { id: "london-jun", city: "London", country: "United Kingdom", start: "2026-06-01", end: "2026-06-06" },
+  { id: "tokyo-jul", city: "Tokyo", country: "Japan", start: "2026-07-18", end: "2026-07-25" }
+];
+
+const myTrips = [
+  { id: "london-jun", city: "London", country: "United Kingdom", start: "2026-06-01", end: "2026-06-06", visibility: "trusted network only", status: "Open to meetups" },
+  { id: "barcelona-jun", city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "visible to trusted networks", status: "Same dates active" },
+  { id: "paris-jul", city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "open to meetups", status: "Upcoming" },
+  { id: "tokyo-jul", city: "Tokyo", country: "Japan", start: "2026-07-18", end: "2026-07-25", visibility: "mutuals only", status: "Planning" },
+  { id: "lisbon-aug", city: "Lisbon", country: "Portugal", start: "2026-08-18", end: "2026-08-22", visibility: "mutuals only", status: "Upcoming" },
+  { id: "barcelona-nov", city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "open to meetups", status: "Trip selector active" },
+  { id: "oslo-apr", city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "trusted network only", status: "past" }
+];
+
+const homePeople = [
+  { name: "Emma Laurent", city: "Oslo", country: "Norway", path: "You -> Laura -> Emma", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, featured: true, tags: ["art", "gallery", "design", "coffee", "hidden gems"], bio: "Design-led traveler, weekend gallery wanderer, and believer in warm introductions over cold DMs.", plans: ["gallery", "coffee"], trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
+  { name: "Mina Aoki", city: "Tokyo", country: "Japan", path: "Met at Gallery visit in Mayfair", badge: "Met", status: ["living"], cta: "Request Trusted Connection", met: true, featured: true, livesIn: "Tokyo", tags: ["food", "wellness", "design", "slow travel"], bio: "Quiet food spots, design hotels, and low-key neighbourhood rituals.", plans: ["gallery", "supper"] },
+  { name: "Maya Brooks", city: "London", country: "United Kingdom", path: "You -> Laura -> Maya", badge: "Living here", status: ["living"], cta: "Request Intro", livesIn: "London", tags: ["architecture", "coffee", "local", "culture"], bio: "Architecture walks, espresso counters, and local introductions in London.", plans: ["coffee", "architecture"] },
+  { name: "Ari Patel", city: "London", country: "United Kingdom", path: "You -> Theo -> Ari", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, tags: ["coffee", "nightlife", "low-key", "music"], bio: "Low-key plans, record bars, coffee walks, and warm group hangs.", plans: ["coffee", "jazz"], trips: [{ city: "London", start: "2026-06-02", end: "2026-06-05" }] },
+  { name: "Nia Mensah", city: "London", country: "United Kingdom", path: "You -> Amara -> Nia", badge: "Trusted local", status: ["living"], cta: "Explore", livesIn: "London", tags: ["local", "hidden gems", "food", "community"], bio: "Local supper clubs, hidden gems, and thoughtful introductions.", plans: ["supper", "coffee"] },
+  { name: "Noah Silva", city: "Barcelona", country: "Spain", path: "You -> Amara -> Noah", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, tags: ["design", "architecture", "coffee", "remote work"], bio: "Architecture, independent coffee spots, and remote-work friendly city days.", plans: ["coffee", "design"], trips: [{ city: "Barcelona", start: "2026-11-08", end: "2026-11-15" }] },
+  { name: "Camille Roux", city: "Paris", country: "France", path: "You -> Emma -> Camille", badge: "Visiting soon", status: ["visiting"], cta: "Explore", tags: ["museum", "gallery", "design", "slow travel"], bio: "Museum weekends, gallery afternoons, quiet wine bars, and slow travel.", plans: ["gallery", "wine"], trips: [{ city: "Barcelona", start: "2026-11-12", end: "2026-11-16" }] },
+  { name: "Ines Costa", city: "Barcelona", country: "Spain", path: "You -> Emma -> Ines", badge: "Living here", status: ["living"], cta: "Request Intro", livesIn: "Barcelona", tags: ["food", "coffee", "local", "hidden gems"], bio: "Barcelona local for thoughtful dinners, sunrise walks, and espresso spots.", plans: ["supper", "coffee"] },
+  { name: "Ren Sato", city: "Tokyo", country: "Japan", path: "You -> Emma -> Ren", badge: "3rd Degree", status: ["same", "visiting"], cta: "Locked", degree: 3, locked: true, tags: ["digital nomad", "design", "city hubs"], bio: "Multi-city connector exploring design hotels and trusted hubs.", plans: ["remote work"], trips: [{ city: "Tokyo", start: "2026-07-20", end: "2026-07-24" }] }
+];
+
+const networkMovements = [
+  { title: "Emma just landed in Lisbon", detail: "Open to local plans this week", tag: "Travel signal" },
+  { title: "Theo unlocked Tokyo", detail: "Through Laura Chen", tag: "City hub" },
+  { title: "Maya hosted Sunday Coffee", detail: "Shoreditch · 4 attended", tag: "Trusted Plan" },
+  { title: "Sofia was vouched by Emma", detail: "New warm path available", tag: "Trust signal" },
+  { title: "2 people are in Barcelona next week", detail: "Same-date overlap in your network", tag: "Trip overlap" }
+];
+
+const networkPeople = [
+  { name: "Laura Chen", city: "London", path: "Added by QR · knows you IRL · recently added", badge: "Trusted Friend", cta: "Explore", degree: 1, recent: true, livesIn: "London" },
+  { name: "Theo Jensen", city: "Oslo", path: "Verified one-to-one meetup · travelling next week", badge: "Trusted Friend", cta: "Explore", degree: 1, trips: [{ city: "London", start: "2026-06-04", end: "2026-06-08" }] },
+  { name: "Sofia Marin", city: "Barcelona", path: "Invite link accepted · same dates as you", badge: "Trusted Friend", cta: "Explore", degree: 1, trips: [{ city: "Barcelona", start: "2026-11-09", end: "2026-11-14" }] },
+  { name: "Amara Okoye", city: "London", path: "Imported contact · vouched · in London now", badge: "Trusted Friend", cta: "Explore", degree: 1, livesIn: "London" }
+];
+
+const metPeople = [
+  { name: "Mina Aoki", city: "Tokyo", path: "Met in Mayfair · visiting next week", badge: "Met", cta: "Request Trusted Connection", met: true, trips: [{ city: "London", start: "2026-06-03", end: "2026-06-05" }] },
+  { name: "Ari Patel", city: "London", path: "Met at Coffee in Shoreditch · in London until 16 Jun", badge: "Met", cta: "Request Trusted Connection", met: true, trips: [{ city: "London", start: "2026-06-01", end: "2026-06-16" }] },
+  { name: "Nia Mensah", city: "London", path: "Met at Jazz night in Dalston · recently added", badge: "Met", cta: "Message", met: true, recent: true, livesIn: "London" }
+];
+
+const secondDegreePeople = [
+  { name: "Emma Laurent", city: "Oslo", path: "You -> Laura -> Emma · same dates as you", badge: "2nd Degree", cta: "Request Intro", degree: 2, trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
+  { name: "Noah Silva", city: "Barcelona", path: "You -> Amara -> Noah · in Barcelona until 15 Nov", badge: "2nd Degree", cta: "View Mutual Path", degree: 2, trips: [{ city: "Barcelona", start: "2026-11-08", end: "2026-11-15" }] },
+  { name: "Maya Brooks", city: "London", path: "You -> Theo -> Maya · local in London", badge: "2nd Degree", cta: "Request Intro", degree: 2, livesIn: "London" }
+];
+
+const thirdDegreePeople = [
+  { name: "Nina", city: "Paris", path: "You -> Laura -> Emma -> Nina", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
+  { name: "Ren", city: "Tokyo", path: "You -> Theo -> Mina -> Ren", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true }
+];
+
+const chats = {
+  all: [
+    { name: "Intro Request", path: "Hugo → Emma via Laura", preview: "Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
+    { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both. Emma suggested a gallery afternoon.", time: "1m", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" },
+    { name: "Emma Laurent", path: "You -> Laura -> Emma", preview: "Friday works. Laura vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Jonas Berg", path: "Hugo → Theo → Jonas", preview: "Theo introduced you both after the Oslo hub.", time: "6m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Mary Chen", path: "Hugo → Maya → Mary", preview: "Maya said you both like quiet dinner plans.", time: "11m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Laura Chen", path: "Trusted Friend", preview: "I can introduce you both if comfortable.", time: "14m", unread: true, trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Theo Jensen", path: "Oslo hub", preview: "Three trusted people are in Paris next week.", time: "1h", trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Coffee in Shoreditch", path: "Plan · private group", preview: "Amara shared the table details.", time: "Sat", trusted: true, screen: "plan-chat", chatType: "plan_chat" }
+  ],
+  unread: [
+    { name: "Intro Request", path: "Hugo → Emma via Laura", preview: "Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
+    { name: "Emma Laurent", path: "You -> Laura -> Emma", preview: "Friday works. Laura vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Amara Okoye", path: "You -> Laura -> Amara", preview: "I have two London friends you should meet.", time: "9m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true }
+  ],
+  trusted: [
+    { name: "Laura Chen", path: "Trusted Friend", preview: "Added through QR in London.", time: "14m", trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Theo Jensen", path: "Trusted Friend", preview: "Met and verified in Oslo.", time: "1h", trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Sofia Marin", path: "Trusted Friend", preview: "Trusted connection from Barcelona.", time: "Yesterday", trusted: true, chatType: "trusted_friend_chat" }
+  ],
+  plans: [
+    { name: "Coffee in Shoreditch", path: "Trusted Plan · 4/6", preview: "Amara shared the table details.", time: "Sat", trusted: true, screen: "plan-chat", chatType: "plan_chat" },
+    { name: "Gallery visit in Mayfair", path: "Trusted Plan · 3/6", preview: "Emma added a meeting point near the entrance.", time: "Sun", trusted: true, screen: "plan-chat", chatType: "plan_chat" },
+    { name: "Jazz night in Dalston", path: "Trusted Plan · pending", preview: "Waiting for host approval.", time: "Fri", trusted: true, screen: "plan-detail" }
+  ]
+};
+
+const shareContacts = [
+  { name: "Laura Chen", path: "Trusted Friend", preview: "Share Emma's profile with Laura.", time: "Trusted" },
+  { name: "Theo Jensen", path: "Met in Oslo", preview: "Share Emma's profile with Theo.", time: "Trusted" },
+  { name: "Amara Okoye", path: "Verified meetup", preview: "Share Emma's profile with Amara.", time: "Trusted" }
+];
+
+const cityMutuals = {
+  Barcelona: [
+    { name: "Noah Silva", city: "Barcelona", path: "You -> Amara -> Noah", badge: "2nd Degree", cta: "Request Intro" },
+    { name: "Ines Costa", city: "Barcelona", path: "You -> Emma -> Ines", badge: "Foodie mutual", cta: "Request Intro" },
+    { name: "Mateo Ruiz", city: "Barcelona", path: "You -> Laura -> Mateo", badge: "Living here", cta: "Explore" }
+  ],
+  Tokyo: [
+    { name: "Mina Aoki", city: "Tokyo", path: "Met at Gallery visit in Mayfair", badge: "Met", cta: "Request Trusted Connection" },
+    { name: "Ren Sato", city: "Tokyo", path: "You -> Emma -> Ren", badge: "Trusted local", cta: "Request Intro" }
+  ]
+};
+
+function formatCountdown(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function formatTripDate(value) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return "";
+  return `${Number(day)}/${Number(month)}/${year.slice(-2)}`;
+}
+
+function tripRangeLabel(trip) {
+  const range = trip.end ? `${formatTripDate(trip.start)}-${formatTripDate(trip.end)}` : formatTripDate(trip.start);
+  return `${trip.city} · ${range}`;
+}
+
+function displayTripDate(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function displayTripRange(trip) {
+  if (!trip?.start) return "";
+  return trip.end ? `${displayTripDate(trip.start)} - ${displayTripDate(trip.end)}` : displayTripDate(trip.start);
+}
+
+function isPastTrip(trip) {
+  if ((trip?.status || "").toLowerCase() === "past") return true;
+  const end = new Date(`${trip?.end || trip?.start || ""}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return false;
+  return end < new Date();
+}
+
+function compactTripRange(trip) {
+  if (!trip?.start) return "";
+  const start = new Date(`${trip.start}T00:00:00`);
+  const end = new Date(`${trip.end || trip.start}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return displayTripRange(trip);
+  const startDay = start.toLocaleDateString("en-GB", { day: "numeric" });
+  const startMonth = start.toLocaleDateString("en-GB", { month: "short" });
+  const endDay = end.toLocaleDateString("en-GB", { day: "numeric" });
+  const endMonth = end.toLocaleDateString("en-GB", { month: "short" });
+  return startMonth === endMonth ? `${startDay}-${endDay} ${endMonth}` : `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+}
+
+function getSelectedHomeTrip() {
+  return homeTrips.find((trip) => trip.id === activeHomeTripId) || homeTrips[0];
+}
+
+function visibleHomeTrips() {
+  const trips = myTrips.filter((trip) => trip.status !== "past" && trip.start);
+  return trips.filter((trip, index, list) => list.findIndex((item) => item.id === trip.id) === index);
+}
+
+function homeCityOptions() {
+  const cities = [
+    "London",
+    ...homeTrips.map((trip) => trip.city),
+    ...myTrips.map((trip) => trip.city),
+    ...homePeople.map((person) => person.livesIn || person.city),
+    ...homePeople.flatMap((person) => (person.trips || []).map((trip) => trip.city))
+  ].filter(Boolean);
+  return [...new Set(cities)];
+}
+
+function homeTripOptionLabel(trip) {
+  return `${trip.city} · ${displayTripRange(trip)}`;
+}
+
+function tripById(id) {
+  return [...homeTrips, ...myTrips].find((trip) => trip.id === id);
+}
+
+function getHomeSelectorContext() {
+  const selectedTrip = tripById(activeHomeTripId) || getSelectedHomeTrip();
+  if (homeFilter === "same") {
+    return { type: "trip", city: selectedTrip.city, trip: selectedTrip };
+  }
+  if (homeFilter === "in-town" || homeFilter === "locals") {
+    return { type: "city", city: activeHomeCity };
+  }
+  return { type: "broad" };
+}
+
+function updateHomeTripDateRange() {
+  const start = formatTripDate(document.querySelector("#tripStartDate")?.value);
+  const end = formatTripDate(document.querySelector("#tripEndDate")?.value);
+  const destination = document.querySelector(".trip-card input[type='text']")?.value.trim() || "Upcoming trip";
+  if (start && end) homeTripDateRange = `${start}-${end}`;
+  if (start && !end) homeTripDateRange = start;
+  if (start) {
+    const [city = destination, country = ""] = destination.split(",").map((part) => part.trim());
+    const savedTrip = {
+      id: `saved-${Date.now()}`,
+      city,
+      country,
+      start: document.querySelector("#tripStartDate")?.value,
+      end: document.querySelector("#tripEndDate")?.value,
+      visibility: "trusted network only",
+      status: "New trip"
+    };
+    homeTrips.unshift(savedTrip);
+    myTrips.push(savedTrip);
+    activeHomeTripId = savedTrip.id;
+  }
+}
+
+function selectedEditingTrip() {
+  return myTrips.find((trip) => trip.id === editingTripId);
+}
+
+function parseTripDestination(value) {
+  const [city = "Upcoming trip", ...countryParts] = value.split(",").map((part) => part.trim()).filter(Boolean);
+  return {
+    city,
+    country: countryParts.join(", ") || ""
+  };
+}
+
+function renderTripEditor() {
+  const isEditing = tripEditorMode === "edit";
+  const trip = isEditing ? selectedEditingTrip() : null;
+  const screen = document.querySelector("#trip");
+  const title = screen?.querySelector(".page-header h1");
+  const copy = screen?.querySelector(".page-header p:last-child");
+  const destination = screen?.querySelector(".trip-card input[type='text']");
+  const start = document.querySelector("#tripStartDate");
+  const end = document.querySelector("#tripEndDate");
+  const visibility = document.querySelector("#tripVisibility");
+  const saveButton = screen?.querySelector("[data-trip-save]");
+  const skipButton = screen?.querySelector("[data-trip-skip]");
+
+  if (title) title.textContent = isEditing ? "Manage Trip" : "Upcoming Trips";
+  if (copy) copy.textContent = isEditing ? "Edit the details your trusted network can see." : "Add where you are going next and decide how open your trip feels.";
+  if (saveButton) saveButton.textContent = isEditing ? "Save Changes" : "Save Trip";
+  if (skipButton) skipButton.textContent = isEditing ? "Cancel" : "I'll do it later";
+
+  if (!isEditing || !trip) return;
+  if (destination) destination.value = [trip.city, trip.country].filter(Boolean).join(", ");
+  if (start) start.value = trip.start || "";
+  if (end) end.value = trip.end || "";
+  if (visibility) {
+    const normalized = (trip.visibility || "").toLowerCase();
+    [...visibility.options].forEach((option) => {
+      const optionValue = option.textContent.toLowerCase();
+      option.selected = normalized.includes(optionValue) || optionValue.includes(normalized.replace("visible to ", ""));
+    });
+  }
+  markScreenClean("trip");
+}
+
+function saveEditedTrip() {
+  const trip = selectedEditingTrip();
+  if (!trip) return;
+  const destinationValue = document.querySelector(".trip-card input[type='text']")?.value.trim() || `${trip.city}, ${trip.country}`;
+  const { city, country } = parseTripDestination(destinationValue);
+  const visibility = document.querySelector("#tripVisibility")?.value || trip.visibility;
+  const openToMeetups = document.querySelector(".trip-card .toggle-card.active")?.textContent.includes("Open to Meetups");
+
+  trip.city = city;
+  trip.country = country;
+  trip.start = document.querySelector("#tripStartDate")?.value || trip.start;
+  trip.end = document.querySelector("#tripEndDate")?.value || trip.end;
+  trip.visibility = visibility.toLowerCase();
+  if (openToMeetups) trip.status = trip.status === "past" ? "past" : "Open to meetups";
+
+  const homeTrip = homeTrips.find((item) => item.id === trip.id);
+  if (homeTrip) {
+    homeTrip.city = trip.city;
+    homeTrip.country = trip.country;
+    homeTrip.start = trip.start;
+    homeTrip.end = trip.end;
+  }
+
+  tripEditorMode = "create";
+  editingTripId = null;
+  renderAllTrips();
+  renderHomeTripSelect();
+  renderHomePeople();
+  renderHomeSuggestions();
+  markScreenClean("trip");
+  showScreen("all-trips", { replace: true });
+}
+
+function datesOverlap(firstStart, firstEnd, secondStart, secondEnd) {
+  if (!firstStart || !secondStart) return false;
+  const aStart = new Date(firstStart);
+  const aEnd = new Date(firstEnd || firstStart);
+  const bStart = new Date(secondStart);
+  const bEnd = new Date(secondEnd || secondStart);
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+function overlapDayCount(firstStart, firstEnd, secondStart, secondEnd) {
+  if (!datesOverlap(firstStart, firstEnd, secondStart, secondEnd)) return 0;
+  const aStart = new Date(firstStart);
+  const aEnd = new Date(firstEnd || firstStart);
+  const bStart = new Date(secondStart);
+  const bEnd = new Date(secondEnd || secondStart);
+  const start = new Date(Math.max(aStart.getTime(), bStart.getTime()));
+  const end = new Date(Math.min(aEnd.getTime(), bEnd.getTime()));
+  return Math.max(1, Math.round((end - start) / 86400000) + 1);
+}
+
+function sameCity(a, b) {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+function personLivesInTripCity(person, context) {
+  return sameCity(person.livesIn, context?.city);
+}
+
+function personVisitsTripCity(person, context) {
+  return (person.trips || []).some((personTrip) => sameCity(personTrip.city, context?.city));
+}
+
+function personTripInCity(person, context) {
+  return (person.trips || []).find((personTrip) => sameCity(personTrip.city, context?.city));
+}
+
+function personTripOverlaps(person, context) {
+  const trip = context?.trip || context;
+  return (person.trips || []).some((personTrip) => (
+    sameCity(personTrip.city, trip?.city) &&
+    datesOverlap(personTrip.start, personTrip.end, trip.start, trip.end)
+  ));
+}
+
+function personMatchesSelectedTrip(person, trip) {
+  if (!trip) return person.featured;
+  if (homeFilter === "locals") return personLivesInTripCity(person, trip);
+  if (homeFilter === "in-town") return personLivesInTripCity(person, trip) || personVisitsTripCity(person, trip);
+  if (homeFilter === "same") return personTripOverlaps(person, trip);
+  return true;
+}
+
+function planMatchesHomeFilter(plan, trip) {
+  if (!trip) return true;
+  const planInCity = sameCity(plan.city, trip.city);
+  if (homeFilter === "same") return planInCity;
+  if (homeFilter === "locals") return planInCity && plan.visibility !== "Invite link only";
+  if (homeFilter === "in-town") return planInCity;
+  return planInCity;
+}
+
+function planRelationshipLabel(plan) {
+  const pathParts = (plan.path || "").split("->").map((part) => part.trim());
+  if (pathParts.length > 2) return `Mutual via ${pathParts[1]}`;
+  if (plan.visibility.includes("2nd")) return "2nd Degree";
+  if (plan.visibility.includes("Trusted")) return "Trusted Network";
+  if (plan.visibility.includes("Mutual")) return "Mutual connections";
+  return plan.visibility;
+}
+
+function homePlanCard(plan, index = 0) {
+  const max = Math.min(plan.max, 6);
+  const spotsLeft = Math.max(0, max - plan.joined);
+  return `
+    <article class="plan-card compact home-discovery-plan" data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${plan.name}</h3>
+        <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${planRelationshipLabel(plan)}</span></div>
+        <p>${plan.location}${plan.city ? `, ${plan.city}` : ""}</p>
+        <div class="plan-meta"><span>${plan.time}</span><span>${plan.joined}/${max} attending</span><span>${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left</span></div>
+      </div>
+      <button data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">Request to Join</button>
+    </article>
+  `;
+}
+
+function homeCardContext(person) {
+  const context = getHomeSelectorContext();
+  const cityTrip = personTripInCity(person, context);
+  const isLocal = personLivesInTripCity(person, context);
+  const overlaps = personTripOverlaps(person, context);
+
+  if (homeFilter === "same" && cityTrip && overlaps) {
+    const days = overlapDayCount(cityTrip.start, cityTrip.end, context.trip?.start, context.trip?.end);
+    return `Also in ${cityTrip.city} · ${compactTripRange(cityTrip)} · Same dates as you · Overlaps ${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (homeFilter === "in-town" && cityTrip && !isLocal) {
+    return `${person.city} · In town until ${displayTripDate(cityTrip.end || cityTrip.start)}`;
+  }
+  if (homeFilter === "locals" && isLocal) {
+    return `${person.city} · Based in ${person.livesIn}`;
+  }
+  if (isLocal) {
+    return `${person.city} · Local connection based in ${person.livesIn}`;
+  }
+  if (cityTrip) {
+    return `${person.city} · Visiting ${cityTrip.city}`;
+  }
+  return "";
+}
+
+const myConnectionSignal = {
+  tags: ["explorer", "food", "art", "gallery", "design", "coffee", "hidden gems", "slow travel", "architecture"],
+  bio: "Warm-intro traveller based in London, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.",
+  plans: ["coffee", "gallery", "jazz", "design"]
+};
+
+const semanticGroups = [
+  ["gallery", "museum", "art", "culture"],
+  ["coffee", "espresso", "cafe"],
+  ["design", "architecture", "design hotels"],
+  ["food", "supper", "dinner"],
+  ["hidden gems", "local", "neighbourhood"],
+  ["slow travel", "low-key", "quiet"],
+  ["jazz", "music", "nightlife"],
+  ["remote work", "digital nomad", "city hubs"]
+];
+
+function semanticBucket(value) {
+  const normalized = String(value || "").toLowerCase();
+  const group = semanticGroups.find((items) => items.some((item) => normalized.includes(item)));
+  return group?.[0] || normalized;
+}
+
+function semanticSet(items = []) {
+  return new Set(items.map(semanticBucket).filter(Boolean));
+}
+
+function sharedSemanticCount(first = [], second = []) {
+  const firstSet = semanticSet(first);
+  const secondSet = semanticSet(second);
+  return [...firstSet].filter((item) => secondSet.has(item)).length;
+}
+
+function bioSemanticHits(bio = "") {
+  const normalized = bio.toLowerCase();
+  return semanticGroups.filter((items) => (
+    items.some((item) => normalized.includes(item)) &&
+    items.some((item) => myConnectionSignal.bio.toLowerCase().includes(item))
+  )).length;
+}
+
+function bestTripOverlap(person) {
+  const personTrips = person.trips || [];
+  let best = null;
+  personTrips.forEach((personTrip) => {
+    myTrips.forEach((myTrip) => {
+      if (!sameCity(personTrip.city, myTrip.city)) return;
+      const overlap = overlapDayCount(personTrip.start, personTrip.end, myTrip.start, myTrip.end);
+      if (overlap && (!best || overlap > best.overlap)) best = { personTrip, myTrip, overlap };
+    });
+  });
+  return best;
+}
+
+function mutualCount(person) {
+  return Math.max(0, (person.path || "").split("->").length - 2);
+}
+
+function suggestedConnectionScore(person) {
+  const sharedTags = sharedSemanticCount(myConnectionSignal.tags, person.tags || []);
+  const sharedPlans = sharedSemanticCount(myConnectionSignal.plans, person.plans || []);
+  const bioHits = bioSemanticHits(person.bio || "");
+  const overlap = bestTripOverlap(person);
+  const mutuals = mutualCount(person);
+  const cityOverlap = person.livesIn === "London" || person.city === activeHomeCity || person.livesIn === activeHomeCity;
+  let score = sharedTags * 3 + sharedPlans * 2 + bioHits * 2 + mutuals + (cityOverlap ? 2 : 0);
+  if (overlap) score += 7 + overlap.overlap;
+  if (person.featured) score += 2;
+  if (person.met) score += 1;
+  if (person.locked) score -= 4;
+
+  let reason = "You may get along";
+  let reasons = [];
+  if (overlap) reason = overlap.overlap > 2 ? `Also in ${overlap.personTrip.city} ${compactTripRange(overlap.personTrip)}` : `Same dates in ${overlap.personTrip.city}`;
+  else if (sharedTags >= 2 && sharedPlans) reason = "Shared gallery + coffee interests";
+  else if (sharedTags >= 3) reason = "Similar travel style";
+  else if (sharedPlans >= 2) reason = "Both like low-key plans";
+  else if (bioHits >= 2) reason = "Similar profile energy";
+  else if (mutuals > 1) reason = `${mutuals} mutual trusted friends`;
+  else if (mutuals === 1) reason = `Trusted through ${(person.path || "").split("->")[1]?.trim() || "a mutual"}`;
+  else if (cityOverlap) reason = `Active in ${person.livesIn || person.city}`;
+
+  const tagReasons = [...semanticSet(person.tags || [])].filter((tag) => semanticSet(myConnectionSignal.tags).has(tag));
+  if (tagReasons.includes("coffee")) reasons.push("love coffee spots");
+  if (tagReasons.includes("gallery")) reasons.push("enjoy galleries");
+  if (tagReasons.includes("design")) reasons.push("save design hotels");
+  if (tagReasons.includes("hidden gems")) reasons.push("look for hidden gems");
+  if (tagReasons.includes("slow travel")) reasons.push("travel slowly");
+  if (tagReasons.includes("food")) reasons.push("like thoughtful food plans");
+  if (tagReasons.includes("jazz")) reasons.push("like low-key music spots");
+  if (sharedPlans >= 2) reasons.push("join similar low-key plans");
+  if (bioHits >= 2) reasons.push("have similar profile energy");
+  if (!reasons.length && mutuals > 1) reasons.push(`share ${mutuals} trusted connections`);
+  if (!reasons.length && mutuals === 1) reasons.push(`know ${(person.path || "").split("->")[1]?.trim() || "a mutual"}`);
+  if (!reasons.length) reasons.push(reason.toLowerCase());
+
+  return { person, score, reason, reasons: [...new Set(reasons)].slice(0, 2) };
+}
+
+function suggestedConnections() {
+  const ranked = homePeople
+    .filter((person) => !person.locked && !connectionStateForPerson(person)?.locked)
+    .map(suggestedConnectionScore)
+    .sort((a, b) => b.score - a.score);
+  const stable = ranked.slice(0, 2);
+  const rotatingPool = ranked.slice(2);
+  const daySeed = Math.floor(Date.now() / 86400000);
+  const rotated = rotatingPool.length
+    ? rotatingPool.slice(daySeed % rotatingPool.length).concat(rotatingPool.slice(0, daySeed % rotatingPool.length)).slice(0, 3)
+    : [];
+  return stable.concat(rotated).map(({ person, reason, reasons }) => ({
+    ...person,
+    suggestionReason: reason,
+    suggestionReasons: reasons,
+    cta: person.cta === "Explore" ? "Explore" : person.cta
+  }));
+}
+
+function suggestedLocationLine(person) {
+  const overlap = bestTripOverlap(person);
+  if (overlap) return `${person.city} · Also in ${overlap.personTrip.city} ${compactTripRange(overlap.personTrip)}`;
+  if (person.livesIn === activeHomeCity || person.city === activeHomeCity) return `${person.city} · In your network this week`;
+  if ((person.tags || []).some((tag) => ["coffee", "gallery", "design"].includes(semanticBucket(tag)))) {
+    return `${person.city} · Shared gallery + coffee interests`;
+  }
+  return `${person.city} · ${person.suggestionReason || "Curated through your trusted network"}`;
+}
+
+function currentTrustedFriendCap() {
+  const meetupUnlock = trustedFriendState.verifiedMeetups >= 2 ? 2 : 0;
+  const earned = meetupUnlock + trustedFriendState.hostedPlans + trustedFriendState.vouches;
+  return Math.min(trustedFriendState.absoluteCap, trustedFriendState.launchCap + earned);
+}
+
+function renderTrustCaps() {
+  const slotCopy = document.querySelector("#trustedSlotCopy");
+  if (!slotCopy) return;
+  slotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} used · max ${trustedFriendState.absoluteCap} · unlock more through verified meetups, hosting and trusted vouches.`;
+}
+
+function stopVerificationCountdown() {
+  if (verificationCountdownTimer) {
+    window.clearInterval(verificationCountdownTimer);
+    verificationCountdownTimer = null;
+  }
+}
+
+function startVerificationCountdown(durationSeconds = 600) {
+  stopVerificationCountdown();
+  const timer = document.querySelector("#mutualCountdown");
+  const cta = document.querySelector("[data-complete-verification]");
+  if (!timer) return;
+
+  const expiresAt = Date.now() + durationSeconds * 1000;
+  const update = () => {
+    const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+    timer.textContent = formatCountdown(remaining);
+    if (remaining === 0) {
+      stopVerificationCountdown();
+      if (cta && verificationMethod === "mutual") {
+        cta.textContent = "Window Expired";
+        cta.disabled = true;
+      }
+    }
+  };
+
+  if (cta) cta.disabled = false;
+  update();
+  verificationCountdownTimer = window.setInterval(update, 1000);
+}
+
+const discoverablePlans = [
+  { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Laura -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", city: "London", joined: 3, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", city: "London", joined: 3, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Laura -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", city: "London", joined: 2, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Dinner in Soho", host: "Noah", path: "You -> Emma -> Noah", time: "Thu, 8:00 PM", location: "Soho", city: "London", joined: 4, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" }
+];
+
+const myPlans = {
+  hosting: [
+    { name: "Coffee in Shoreditch", host: "You", path: "Hosted by you", time: "Sat, 2:00 PM", location: "Shoreditch", joined: 3, max: 6, visibility: "Mutual connections", status: "2 pending requests", role: "hosting", mine: true },
+    { name: "Late lunch in Notting Hill", host: "You", path: "Invite link only", time: "Tue, 1:00 PM", location: "Notting Hill", joined: 1, max: 6, visibility: "Invite link only", status: "Draft open", role: "hosting", mine: true },
+    { name: "Dinner in Soho", host: "You", path: "Direct Trusted Friends only", time: "Thu, 8:00 PM", location: "Soho", joined: 4, max: 6, visibility: "Trusted Friends", status: "Confirmed", role: "hosting", mine: true }
+  ],
+  attending: [
+    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Accepted", role: "attending" },
+    { name: "Sunday walk in Hampstead", host: "Laura", path: "Trusted Friend", time: "Sun, 9:30 AM", location: "Hampstead", joined: 2, max: 6, visibility: "Mutual connections", status: "Group chat open", role: "attending" }
+  ],
+  pending: [
+    { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Laura -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", joined: 3, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" }
+  ],
+  past: [
+    { name: "Design stores in Marylebone", host: "Maya", path: "You -> Amara -> Maya", time: "Sat, 4:00 PM", location: "Marylebone", joined: 4, max: 6, visibility: "2nd Degree", status: "Met created", role: "past" },
+    { name: "Low-key supper club", host: "Noah", path: "You -> Emma -> Noah", time: "Wed, 7:30 PM", location: "Hackney", joined: 6, max: 6, visibility: "2nd Degree", status: "Verified attendees", role: "past" }
+  ]
+};
+
+const previewPlans = [
+  discoverablePlans[0],
+  discoverablePlans[1],
+  discoverablePlans[2]
+];
+
+const emmaTrips = [
+  { city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "open to meetups", status: "same dates" },
+  { city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "trusted network only", status: "visible" },
+  { city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "past visible", status: "past" }
+];
+
+const emmaPlans = {
+  hosting: [
+    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Request to join", viewerStatus: "discoverable" }
+  ],
+  attending: [
+    { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Laura -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", joined: 3, max: 6, visibility: "Mutual connections", status: "Accepted", viewerStatus: "accepted", role: "attending" }
+  ],
+  past: [
+    { name: "Design stores in Marylebone", host: "Maya", path: "You -> Emma -> Maya", time: "Sat, 4:00 PM", location: "Marylebone", joined: 4, max: 6, visibility: "2nd Degree", status: "Past", role: "past" }
+  ]
+};
+
+const personProfiles = {
+  "Emma Laurent": {
+    name: "Emma Laurent",
+    initials: "EL",
+    city: "Oslo",
+    homeCity: "Oslo",
+    relationship: "Mutual via Laura",
+    path: "You -> Laura -> Emma",
+    paths: ["You -> Laura -> Emma", "You -> Maya -> Emma"],
+    action: "Request Intro",
+    bio: "Design-led traveller, weekend gallery wanderer, and believer in warm introductions over cold DMs.",
+    interests: ["Hidden Gems", "Art & Culture", "Coffee Spots", "Luxury Travel"],
+    stats: "14 countries visited · 9 trusted hubs",
+    vouches: [["Laura", "\"Thoughtful, kind, easy to meet.\""], ["Amara", "\"Always knows the place.\""]],
+    instagram: "emma.laurent",
+    trips: emmaTrips,
+    plans: emmaPlans
+  },
+  "Noah Silva": {
+    name: "Noah Silva",
+    initials: "NS",
+    city: "Barcelona",
+    homeCity: "Barcelona",
+    relationship: "2nd Degree",
+    path: "You -> Amara -> Noah",
+    paths: ["You -> Amara -> Noah"],
+    action: "Request Intro",
+    bio: "Barcelona-based connector for design hotels, late dinners, and easy mutual introductions.",
+    interests: ["Foodie", "Architecture", "Nightlife", "Local Host"],
+    stats: "9 countries visited · 5 trusted hubs",
+    vouches: [["Amara", "\"Warm, generous and thoughtful.\""], ["Emma", "\"Knows quiet places well.\""]],
+    instagram: "noah.silva",
+    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "open to meetups", status: "same dates" }],
+    plans: {
+      hosting: [{ name: "Rooftop Drinks in Soho", host: "Noah", path: "You -> Emma -> Noah", time: "Fri, 7:00 PM", location: "Soho", city: "London", joined: 4, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" }],
+      attending: [],
+      past: []
+    }
+  },
+  "Camille Roux": {
+    name: "Camille Roux",
+    initials: "CR",
+    city: "Paris",
+    homeCity: "Paris",
+    relationship: "Same Dates",
+    path: "You -> Emma -> Camille",
+    paths: ["You -> Emma -> Camille"],
+    action: "Explore",
+    bio: "Visiting soon for galleries, bakeries, and slow mornings between trusted plans.",
+    interests: ["Galleries", "Slow travel", "Coffee Spots"],
+    stats: "7 countries visited · 3 trusted hubs",
+    vouches: [["Emma", "\"Curious and easy company.\""]],
+    instagram: "camille.roux",
+    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-12", end: "2026-11-16", visibility: "open to meetups", status: "same dates overlap" }],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Maya Brooks": {
+    name: "Maya Brooks",
+    initials: "MB",
+    city: "London",
+    homeCity: "London",
+    relationship: "Lives Here",
+    path: "You -> Laura -> Maya",
+    paths: ["You -> Laura -> Maya"],
+    action: "Request Intro",
+    bio: "London local who hosts quiet design walks and trusted, small-group plans.",
+    interests: ["Design hotels", "Hidden Gems", "Art & Culture"],
+    stats: "11 countries visited · 7 trusted hubs",
+    vouches: [["Amara", "\"A calm, thoughtful host.\""], ["Laura", "\"Great instincts for people.\""]],
+    instagram: "maya.brooks",
+    trips: [],
+    plans: {
+      hosting: [],
+      attending: [],
+      past: [{ name: "Design stores in Marylebone", host: "Maya", path: "You -> Amara -> Maya", time: "Sat, 4:00 PM", location: "Marylebone", joined: 4, max: 6, visibility: "2nd Degree", status: "Past", role: "past", viewerStatus: "past", viewerAttended: true }]
+    }
+  },
+  "Amara Okoye": {
+    name: "Amara Okoye",
+    initials: "AO",
+    city: "London",
+    homeCity: "Lagos",
+    relationship: "Trusted Friend",
+    path: "Trusted Friend · 1st Degree",
+    directRelationship: "Trusted Friend",
+    action: "Message",
+    bio: "Trusted friend and warm London host for small, thoughtful plans.",
+    interests: ["Supper clubs", "Coffee Spots", "Local Host"],
+    stats: "16 countries visited · 10 trusted hubs",
+    vouches: [["Laura", "\"Always makes people feel welcome.\""], ["Theo", "\"Deeply reliable.\""]],
+    instagram: "amara.okoye",
+    trips: [],
+    plans: {
+      hosting: [{ name: "Coffee in Shoreditch", host: "Amara", path: "Trusted Friend", time: "Sat, 2:00 PM", location: "Shoreditch", city: "London", joined: 4, max: 6, visibility: "Mutual connections", status: "Accepted", viewerStatus: "accepted", role: "attending" }],
+      attending: [],
+      past: []
+    }
+  },
+  "Laura Chen": {
+    name: "Laura Chen",
+    initials: "LC",
+    city: "London",
+    homeCity: "London",
+    relationship: "Trusted Friend",
+    path: "Trusted Friend · 1st Degree",
+    directRelationship: "Trusted Friend",
+    action: "Message",
+    bio: "A trusted London connector who makes warm, thoughtful introductions.",
+    interests: ["Coffee Spots", "Galleries", "Hidden Gems"],
+    stats: "12 countries visited · 8 trusted hubs",
+    vouches: [["Amara", "\"A natural bridge between good people.\""]],
+    instagram: "laura.chen",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Theo Jensen": {
+    name: "Theo Jensen",
+    initials: "TJ",
+    city: "Oslo",
+    homeCity: "Oslo",
+    relationship: "Trusted Friend",
+    path: "Trusted Friend · verified meetup",
+    directRelationship: "Trusted Friend",
+    action: "Message",
+    bio: "Trusted friend with a careful eye for safe, high-quality city plans.",
+    interests: ["Local Host", "Jazz bars", "Design hotels"],
+    stats: "10 countries visited · 6 trusted hubs",
+    vouches: [["Laura", "\"Reliable, calm and generous.\""]],
+    instagram: "theo.jensen",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  }
+};
+
+const planJoinRequests = [
+  { name: "Sofia Marin", path: "You -> Laura -> Sofia", vouch: "Vouched by Laura", message: "I know Amara through the Oslo hub and would love to join for coffee." },
+  { name: "Ari Patel", path: "You -> Theo -> Ari", vouch: "Verified meetup", message: "I will be nearby after a gallery visit and can keep it low-key." },
+  { name: "Maya Brooks", path: "You -> Amara -> Maya", vouch: "2 mutuals", message: "Laura mentioned this plan and said it may be a good fit." }
+];
+
+const connectionRequests = {
+  intro: [
+    { name: "Noah Silva", path: "You -> Laura -> Noah", type: "Intro request received", status: "Waiting for you", actions: true },
+    { name: "Ines Costa", path: "You -> Emma -> Ines", type: "Intro request received", status: "New" }
+  ],
+  sent: [
+    { name: "Emma Laurent", path: "You -> Laura -> Emma", type: "Via mutual friend", status: "Sent to Laura" },
+    { name: "Maya Brooks", path: "You -> Amara -> Maya", type: "Direct request", status: "Waiting" }
+  ],
+  accepted: [
+    { name: "Theo Jensen", path: "You -> Theo", type: "Accepted request", status: "Chat open" },
+    { name: "Sofia Marin", path: "You -> Laura -> Sofia", type: "Accepted plan request", status: "Added to chat" }
+  ],
+  met: [
+    { name: "Mina Aoki", path: "Met at Gallery visit in Mayfair", type: "Trusted Friend request", status: "Needs mutual accept" },
+    { name: "Ari Patel", path: "Met at Coffee in Shoreditch", type: "Upgrade from Met", status: "Slot required" },
+    { name: "Nia Mensah", path: "Met at Jazz night in Dalston", type: "Message open", status: "Network locked" }
+  ],
+  meetups: [
+    { name: "Emma Laurent", path: "You -> Laura -> Emma", type: "Pending meetup", status: "Verify after coffee" },
+    { name: "Amara Okoye", path: "You -> Laura -> Amara", type: "Pending plan meetup", status: "QR available" }
+  ]
+};
+
+const clusterNetworks = {
+  Laura: { state: "unlocked", path: "Trusted Friend · 1st Degree", people: ["Maya", "Ari", "Sofia"] },
+  Emma: { state: "locked", path: "2nd Degree via Laura · request intro first", people: ["Locked", "Locked", "Locked"] },
+  Theo: { state: "unlocked", path: "Trusted Friend · 1st Degree", people: ["Mina", "Ari", "Ren"] },
+  Noah: { state: "locked", path: "2nd Degree via Amara · network locked", people: ["Locked", "Locked", "Locked"] },
+  Mina: { state: "locked", path: "Met only · network stays locked until upgrade", people: ["Locked", "Locked", "Locked"] }
+};
+
+function activeScreenId() {
+  return document.querySelector(".screen.active")?.dataset.screen || "welcome";
+}
+
+function markScreenClean(id = activeScreenId()) {
+  document.querySelector(`[data-screen="${id}"]`)?.removeAttribute("data-dirty");
+}
+
+function hasUnsavedChanges(id = activeScreenId()) {
+  return dirtyScreens.has(id) && document.querySelector(`[data-screen="${id}"]`)?.dataset.dirty === "true";
+}
+
+function fallbackForScreen(id) {
+  if (id === "qr-reveal") return qrReturnTarget || "my-profile";
+  if (id === "trip") return tripReturnTarget || "trusted";
+  return backFallbacks[id] || "home";
+}
+
+function showScreen(id, options = {}) {
+  const current = activeScreenId();
+  if (!options.replace && current && current !== id) {
+    screenHistory.push(current);
+  }
+  if (current === "verify" && id !== "verify") stopVerificationCountdown();
+  document.querySelector("#profileMenu")?.classList.remove("open");
+  screens.forEach((screen) => screen.classList.toggle("active", screen.dataset.screen === id));
+  document.querySelectorAll(".bottom-nav").forEach(renderNav);
+  const active = document.querySelector(`[data-screen="${id}"] .scroll-area`);
+  if (active) active.scrollTop = 0;
+  if (id === "home") {
+    renderHomePeople();
+    renderHomePlans();
+    renderHomeSuggestions();
+    renderNetworkMovement();
+  }
+  if (id === "chats") renderChats();
+  if (id === "chat-detail") renderChatDetail();
+  if (id === "request-intro") renderIntroMethod(introMethod);
+  if (id === "nearby-people") renderNearbyPeoplePage();
+  if (id === "suggested-connections") renderSuggestedConnectionsPage();
+  if (id === "all-trips") renderAllTrips();
+  if (id === "trip") renderTripEditor();
+  if (id === "my-plans") renderMyPlans();
+  if (id === "person-trips") renderPersonTrips();
+  if (id === "person-plans") renderPersonPlans();
+  if (id === "plan-detail") renderPlanDetail();
+  if (id === "edit-plan") renderEditPlan();
+  if (id === "plan-chat") renderPlanChat();
+  if (id === "trusted-plans") renderTrustedPlans();
+  if (id === "connection-requests") renderConnectionRequests();
+  if (id === "plan-requests") renderPlanRequests();
+  if (id === "profile") renderProfile();
+}
+
+function confirmDiscardChanges(onDiscard) {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Discard changes">
+      <strong>Discard changes?</strong>
+      <p>Your draft will not be saved if you leave this screen.</p>
+      <div>
+        <button type="button" data-keep-editing>Keep editing</button>
+        <button type="button" data-discard-changes>Discard</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-keep-editing]") || event.target === dialog) {
+      dialog.remove();
+      return;
+    }
+    if (event.target.closest("[data-discard-changes]")) {
+      dialog.remove();
+      onDiscard();
+    }
+  });
+  document.body.append(dialog);
+}
+
+function confirmCancelHostedPlan() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Cancel plan">
+      <strong>Cancel this plan?</strong>
+      <p>This will permanently cancel the plan for all attendees. This action can't be undone.</p>
+      <div>
+        <button type="button" data-keep-plan>Keep Plan</button>
+        <button type="button" data-confirm-cancel-plan>Cancel Plan</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-keep-plan]") || event.target === dialog) {
+      dialog.remove();
+      return;
+    }
+    if (event.target.closest("[data-confirm-cancel-plan]")) {
+      dialog.remove();
+      planFilter = "hosting";
+      showScreen("my-plans", { replace: true });
+    }
+  });
+  document.body.append(dialog);
+}
+
+function confirmDeleteTrip(tripId) {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete trip">
+      <strong>Delete this trip?</strong>
+      <p>This will remove the trip from your profile and matching views.</p>
+      <div>
+        <button type="button" data-keep-trip>Cancel</button>
+        <button type="button" data-confirm-delete-trip>Delete Trip</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-keep-trip]") || event.target === dialog) {
+      dialog.remove();
+      return;
+    }
+    if (event.target.closest("[data-confirm-delete-trip]")) {
+      const tripIndex = myTrips.findIndex((trip) => trip.id === tripId);
+      if (tripIndex >= 0) myTrips.splice(tripIndex, 1);
+      const homeIndex = homeTrips.findIndex((trip) => trip.id === tripId);
+      if (homeIndex >= 0) homeTrips.splice(homeIndex, 1);
+      if (activeHomeTripId === tripId) activeHomeTripId = homeTrips[0]?.id || myTrips[0]?.id || "";
+      dialog.remove();
+      renderAllTrips();
+      renderHomeTripSelect();
+      renderHomePeople();
+      renderHomeSuggestions();
+      showScreen("all-trips", { replace: true });
+    }
+  });
+  document.body.append(dialog);
+}
+
+function confirmRemoveConnection(name) {
+  const profile = personProfiles[name];
+  if (!profile) return;
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Remove connection">
+      <strong>Remove from network?</strong>
+      <p>This will remove this person as an active connection. Any network paths that depend on them may become locked, but your past chats, plans and meetup history will remain archived.</p>
+      <div>
+        <button type="button" data-keep-connection>Keep Connection</button>
+        <button type="button" data-confirm-remove-connection>Remove</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-keep-connection]") || event.target === dialog) {
+      dialog.remove();
+      return;
+    }
+    if (event.target.closest("[data-confirm-remove-connection]")) {
+      removedConnections.add(name);
+      if (profile.directRelationship === "Trusted Friend" && trustedFriendState.used > 0) trustedFriendState.used -= 1;
+      dialog.remove();
+      renderProfile();
+      renderHomePeople();
+      renderHomeSuggestions();
+      renderNetworkLists();
+      renderTrustCaps();
+    }
+  });
+  document.body.append(dialog);
+}
+
+function confirmReconnection(name) {
+  const profile = personProfiles[name];
+  if (!profile) return;
+  document.querySelector(".discard-dialog")?.remove();
+  const firstName = profile.name.split(" ")[0];
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Request reconnection">
+      <strong>Reconnect with ${firstName}?</strong>
+      <p>You’re no longer actively connected, but you can request to reconnect. If ${firstName} accepts, your connection becomes active again and your shared network path reopens. Past chats, plans and meetup history remain preserved.</p>
+      <div>
+        <button type="button" data-cancel-reconnect>Cancel</button>
+        <button type="button" data-send-reconnect>Send Request</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-cancel-reconnect]") || event.target === dialog) {
+      dialog.remove();
+      return;
+    }
+    if (event.target.closest("[data-send-reconnect]")) {
+      dialog.remove();
+      renderProfile();
+    }
+  });
+  document.body.append(dialog);
+}
+
+function showUtilityFeedback(title, body, actionLabel = "Done") {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="${title}">
+      <strong>${title}</strong>
+      <p>${body}</p>
+      <div>
+        <button type="button" data-dialog-close>${actionLabel}</button>
+      </div>
+    </div>
+  `;
+  dialog.addEventListener("click", (event) => {
+    if (event.target.closest("[data-dialog-close]") || event.target === dialog) dialog.remove();
+  });
+  document.body.append(dialog);
+}
+
+function navigateBackFrom(current) {
+  markScreenClean(current);
+  const target = current === "unlocked" ? fallbackForScreen(current) : screenHistory.pop() || fallbackForScreen(current);
+  showScreen(target, { replace: true });
+}
+
+function goBack() {
+  const current = activeScreenId();
+  if (rootScreens.has(current)) return;
+  if (hasUnsavedChanges(current)) {
+    confirmDiscardChanges(() => navigateBackFrom(current));
+    return;
+  }
+  navigateBackFrom(current);
+}
+
+function ensureBackButtons() {
+  screens.forEach((screen) => {
+    if (rootScreens.has(screen.dataset.screen) || screen.querySelector(".screen-back-button")) return;
+    const existingBack = [...screen.querySelectorAll("button")]
+      .find((button) => button.textContent.trim().toLowerCase() === "back");
+    if (existingBack) {
+      existingBack.removeAttribute("data-next");
+      existingBack.classList.add("back-placeholder");
+      existingBack.setAttribute("aria-hidden", "true");
+      existingBack.tabIndex = -1;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "screen-back-button";
+    button.dataset.back = "";
+    button.setAttribute("aria-label", "Go back");
+    screen.append(button);
+    screen.classList.add("has-back-nav");
+  });
+}
+
+function cleanBrandingImages() {
+  document.querySelectorAll(".onboarding-brand img, .brand-small img").forEach((image) => image.remove());
+}
+
+function renderInstagramAccess() {
+  const profile = personProfiles[selectedProfileName] || personProfiles["Emma Laurent"];
+  const card = document.querySelector("#emmaInstagramCard");
+  const status = document.querySelector("#emmaInstagramStatus");
+  const hint = document.querySelector("#emmaInstagramHint");
+  if (!card || !status || !hint) return;
+  const unlocked = instagramAccessUnlocked || profile.relationship === "Trusted Friend";
+  card.dataset.trustedInstagram = String(unlocked);
+  card.dataset.instagramProfile = profile.instagram;
+  card.classList.toggle("locked", !unlocked);
+  card.classList.toggle("unlocked", unlocked);
+  status.textContent = unlocked
+    ? `Trusted contact confirmed. Open ${profile.name.split(" ")[0]}'s Instagram travel photos.`
+    : `Connect as trusted contacts to view ${profile.name.split(" ")[0]}'s travel photos.`;
+  hint.textContent = unlocked
+    ? `@${profile.instagram} opens in Instagram.`
+    : "Locked until a trusted connection is established.";
+}
+
+function selectedProfile() {
+  return personProfiles[selectedProfileName] || personProfiles["Emma Laurent"];
+}
+
+function nameKey(name = "") {
+  return name.split(" ")[0].toLowerCase();
+}
+
+function isRemovedName(name = "") {
+  const key = nameKey(name);
+  return [...removedConnections].some((removed) => nameKey(removed) === key);
+}
+
+function pathParts(path = "") {
+  return path.includes("->") ? path.split("->").map((part) => part.trim()).filter(Boolean) : [];
+}
+
+function pathDependsOnRemoved(path = "", targetName = "") {
+  const parts = pathParts(path);
+  const targetKey = nameKey(targetName || parts.at(-1) || "");
+  return parts.slice(1, -1).some((part) => isRemovedName(part)) || (targetKey && isRemovedName(targetKey));
+}
+
+function activePath(paths = [], targetName = "") {
+  return paths.find((path) => !pathDependsOnRemoved(path, targetName));
+}
+
+function archivedPath(paths = [], targetName = "") {
+  return paths.find((path) => pathDependsOnRemoved(path, targetName)) || paths[0] || "";
+}
+
+function viaName(path = "") {
+  const parts = pathParts(path);
+  return parts.length > 2 ? parts[1] : "";
+}
+
+function connectionStateForProfile(profile) {
+  const paths = profile.paths || (profile.path?.includes("->") ? [profile.path] : []);
+  const directRelationship = profile.directRelationship || (["Trusted Friend", "Met"].includes(profile.relationship) ? profile.relationship : "");
+  const removedSelf = isRemovedName(profile.name);
+  const livePath = activePath(paths, profile.name);
+  const oldPath = archivedPath(paths, profile.name);
+  const removedVia = viaName(oldPath);
+
+  if (removedSelf) {
+    return {
+      state: "archived",
+      relationship: "Archived Path",
+      path: `Previously connected${removedVia ? ` via ${removedVia}` : ""}`,
+      canRemove: false,
+      removeLabel: "",
+      archived: true,
+      locked: false,
+      action: "Request Reconnection"
+    };
+  }
+  if (directRelationship) {
+    return {
+      state: "direct",
+      relationship: directRelationship,
+      path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · network remains locked",
+      canRemove: true,
+      removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
+      locked: false,
+      action: directRelationship === "Trusted Friend" ? "Message" : "Request Trusted Connection"
+    };
+  }
+  if (livePath) {
+    const via = viaName(livePath);
+    return {
+      state: "active-path",
+      relationship: via ? `Connected via ${via}` : profile.relationship,
+      path: livePath,
+      canRemove: true,
+      removeLabel: "Remove from Network",
+      locked: false,
+      action: profile.action || "Request Intro"
+    };
+  }
+  return {
+    state: "archived",
+    relationship: "Archived Path",
+    path: `Previously connected${removedVia ? ` via ${removedVia}` : ""}`,
+    canRemove: false,
+    removeLabel: "",
+    archived: true,
+    locked: false,
+    action: "Request Reconnection"
+  };
+}
+
+function connectionStateForPerson(person) {
+  const profile = personProfiles[person.name];
+  if (profile) return connectionStateForProfile(profile);
+  const paths = person.path?.includes("->") ? [person.path] : [];
+  if (paths.length && !activePath(paths, person.name)) {
+    const oldPath = archivedPath(paths, person.name);
+    return {
+      relationship: "Archived Path",
+      path: `Previously connected${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""} · No active trust path`,
+      archived: true,
+      locked: false,
+      action: "Request Reconnection"
+    };
+  }
+  return null;
+}
+
+function allPlansFlat() {
+  return [
+    ...discoverablePlans,
+    ...Object.values(myPlans).flat(),
+    ...Object.values(personProfiles).flatMap((profile) => Object.values(profile.plans || {}).flat())
+  ];
+}
+
+function selectedPlan() {
+  const matches = allPlansFlat().filter((plan) => plan.name === selectedPlanName);
+  const roleMatch = matches.find((plan) => {
+    if (selectedPlanStatus === "hosting") return plan.role === "hosting" || plan.mine;
+    if (selectedPlanStatus === "accepted") return plan.role === "attending" || plan.viewerStatus === "accepted";
+    if (selectedPlanStatus === "pending") return plan.role === "pending" || plan.viewerStatus === "pending";
+    if (selectedPlanStatus === "past") return plan.role === "past" || plan.viewerStatus === "past";
+    if (selectedPlanStatus === "discoverable") return plan.viewerStatus === "discoverable" && !plan.mine;
+    return false;
+  });
+  return roleMatch || matches.find((plan) => plan.role || plan.viewerStatus) || matches[0] || discoverablePlans[0] || myPlans.hosting[0];
+}
+
+function planStatusForName(name) {
+  if ((myPlans.hosting || []).some((plan) => plan.name === name)) return "hosting";
+  if ((myPlans.attending || []).some((plan) => plan.name === name)) return "accepted";
+  if ((myPlans.pending || []).some((plan) => plan.name === name)) return "pending";
+  if ((myPlans.past || []).some((plan) => plan.name === name)) return "past";
+  return "discoverable";
+}
+
+function planPreviewRow(plan) {
+  const role = plan.host === selectedProfile().name ? "Hosting" : plan.role === "past" ? "Past" : "Attending";
+  return `<div class="trip-row"><strong>${role}</strong><span>${plan.name} · ${plan.time}</span></div>`;
+}
+
+function renderProfile() {
+  const profile = selectedProfile();
+  const root = document.querySelector("#profile .scroll-area");
+  if (!root) return;
+  const connectionState = connectionStateForProfile(profile);
+  const upcomingTrips = profile.trips.filter((trip) => trip.status !== "past").slice(0, 2);
+  const allPlans = [...(profile.plans.hosting || []), ...(profile.plans.attending || []), ...(profile.plans.past || [])];
+  const activePlans = allPlans.filter((plan) => plan.role !== "past").length;
+  const pastPlans = allPlans.filter((plan) => plan.role === "past").length;
+  const actionLabel = connectionState.action || (profile.relationship === "Trusted Friend" ? "Message" : profile.relationship === "Met" ? "Request Trusted Connection" : "Request Intro");
+  const actionTarget = actionLabel === "Message" ? "chat-detail" : "request-intro";
+  const primaryAction = connectionState.archived
+    ? `<button type="button" data-request-reconnect="${profile.name}">Request Reconnection</button>`
+    : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"`}>${actionLabel}</button>`;
+  root.innerHTML = `
+    <div class="cover"></div>
+    <section class="profile-head">
+      <div class="profile-avatar">${profile.initials}</div><div class="verified">Verified</div>
+      <h1>${profile.name}</h1><span class="trust-badge relationship-badge">${connectionState.relationship}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
+      <div class="profile-actions">${primaryAction}<button data-next="chats" data-chat-mode="share">Share Profile</button></div>
+    </section>
+    <section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${profile.interests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>
+    <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips">${upcomingTrips.length ? upcomingTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("") : `<div class="trip-row muted"><strong>No visible trips</strong><span>Nothing visible right now</span></div>`}</div></section>
+    <section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>${activePlans} active · ${pastPlans} past</span></div><button data-next="person-plans">View all Plans →</button></div>${allPlans.slice(0, 2).map(planPreviewRow).join("") || `<div class="trip-row muted"><strong>No visible plans</strong><span>No current plan previews</span></div>`}</section>
+    <section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>${profile.stats}</p><button data-next="network-map">Open Network Explorer</button></div></section>
+    <section class="content-section"><h2>Vouched By</h2><div class="testimonial-row">${profile.vouches.map(([name, quote]) => `<div>${name}<span>${quote}</span></div>`).join("")}</div></section>
+    <button class="instagram-lock locked" type="button" id="emmaInstagramCard" data-instagram-profile="${profile.instagram}" data-trusted-instagram="false"><strong>Instagram</strong><span id="emmaInstagramStatus">Connect as trusted contacts to view ${profile.name.split(" ")[0]}'s travel photos.</span><small id="emmaInstagramHint">Locked until a trusted connection is established.</small></button>
+    ${connectionState.canRemove ? `<div class="profile-utility-actions"><button type="button" data-remove-connection="${profile.name}">Remove from Network</button></div>` : `<p class="archived-path-note">You’re no longer actively connected. Past chats, plans and meetup history remain preserved.</p>`}
+  `;
+  renderInstagramAccess();
+}
+
+function renderTrustedMode(mode = "onboarding") {
+  trustedMode = mode;
+  const instruction = document.querySelector("#trustedInstruction");
+  const cta = document.querySelector("#trustedCta");
+  if (!instruction || !cta) return;
+  if (mode === "add-friends") {
+    instruction.textContent = "Add Trusted Friends intentionally. Slots are limited and wider networks unlock only for 1st Degree relationships.";
+    cta.textContent = "Done";
+    cta.dataset.next = "network-list";
+  } else {
+    instruction.textContent = "Add up to 6 Trusted Friends to start your network.";
+    cta.textContent = "Continue";
+    cta.dataset.next = "privacy";
+  }
+  renderTrustCaps();
+}
+
+function renderQrRevealMode(returnTarget = "home") {
+  qrReturnTarget = returnTarget;
+  const cta = document.querySelector("#qr-reveal .primary-button");
+  if (cta) {
+    cta.textContent = returnTarget === "home" ? "Home" : "Continue";
+    cta.dataset.next = returnTarget;
+  }
+}
+
+function renderNav(nav) {
+  const current = document.querySelector(".screen.active")?.dataset.screen;
+  const isActive = (item) => (
+    item.screen === current ||
+    (current === "network-map" && item.screen === "network-list") ||
+    (current === "city-mutuals" && item.screen === "home") ||
+    (["trusted-plans", "nearby-people", "suggested-connections", "create-plan", "plan-detail", "plan-chat", "notifications", "connection-requests"].includes(current) && item.screen === "home") ||
+    (["my-profile", "all-trips", "my-plans", "edit-plan", "plan-requests", "person-trips", "person-plans", "edit-profile", "settings", "safety-centre", "how-works", "profile"].includes(current) && item.screen === "my-profile")
+  );
+  nav.innerHTML = bottomNavTargets.map((item) => (
+    `<button class="${isActive(item) ? "active" : ""}" data-next="${item.screen}">${item.label}</button>`
+  )).join("");
+}
+
+function personCard(person, index = 0) {
+  const color = index % 3 === 0 ? "#ffbfa3,#a79cff" : index % 3 === 1 ? "#79dccb,#7c72ff" : "#ffd89b,#6c63ff";
+  const pathState = connectionStateForPerson(person);
+  const isArchived = Boolean(pathState?.archived);
+  const isLocked = !isArchived && (pathState?.locked || person.locked || person.degree === 3);
+  const cardCta = pathState?.action || person.cta;
+  const nextScreen = cardCta.includes("Request") || cardCta.includes("Path") ? "request-intro" : "profile";
+  const hasProfile = Boolean(personProfiles[person.name]);
+  const action = isArchived ? "Request Reconnection" : isLocked ? "Locked" : cardCta;
+  const isHomeDiscovery = ["home", "nearby-people"].includes(activeScreenId());
+  const pathParts = (person.path || "").split("->").map((part) => part.trim());
+  const mutualName = pathParts.length > 2 ? pathParts[1] : "";
+  const relationship = pathState?.relationship || (person.badge === "Living here" ? "Lives Here"
+    : person.badge === "Trusted local" ? "Local Host"
+      : person.degree === 2 && mutualName ? `Mutual via ${mutualName}`
+        : person.badge);
+  const context = pathState?.path || (person.met
+    ? `${person.path}. Met in person - not yet added to trusted circle.`
+    : person.degree === 2 && mutualName
+      ? `Visible through ${mutualName}. Request an intro before messaging.`
+      : person.degree === 3
+        ? "Limited preview - unlock through a trusted connection."
+        : person.livesIn
+          ? `Local connection based in ${person.livesIn}.`
+          : person.trips?.length
+            ? `Visiting ${person.trips[0].city} during your selected dates.`
+            : person.path);
+  const discoveryContext = isHomeDiscovery ? homeCardContext(person) : "";
+  const suggestionContext = person.suggestionReason ? suggestedLocationLine(person) : "";
+  const suggestionWhy = person.suggestionReasons?.length
+    ? `<div class="suggestion-why"><strong>Because you both...</strong>${person.suggestionReasons.map((reason) => `<span>${reason}</span>`).join("")}</div>`
+    : "";
+  return `
+    <article class="person-card ${isLocked ? "locked-relation" : ""}" ${hasProfile ? `data-next="profile" data-profile-name="${person.name}"` : ""}>
+      <div class="avatar" style="background:linear-gradient(145deg, ${color})"></div>
+      <div>
+        <h3>${person.name}</h3>
+        <span class="trust-badge relationship-badge">${relationship}</span>
+        <p>${suggestionContext || discoveryContext || `${person.city} · ${context}`}</p>
+        ${suggestionWhy}
+      </div>
+      <button ${isArchived ? `type="button" data-request-reconnect="${person.name}"` : isLocked ? "disabled" : `data-next="${nextScreen}" ${hasProfile ? `data-profile-name="${person.name}"` : ""}`}>${action}</button>
+    </article>
+  `;
+}
+
+function chatCard(chat, index, mode = "default") {
+  const action = mode === "share" ? `<button class="share-contact" data-share-contact="${chat.name}">Share</button>` : "";
+  const normalizedType = (chat.chatType || "").replaceAll("-", "_");
+  const isPlanChat = chat.screen === "plan-chat" || normalizedType === "plan_chat" || normalizedType === "archived_plan_chat";
+  const destination = isPlanChat ? "plan-chat" : (chat.screen || "chat-detail");
+  const planStatus = normalizedType === "archived_plan_chat" ? "past" : (chat.planStatus || planStatusForName(chat.name));
+  const planAttrs = isPlanChat ? ` data-plan-name="${chat.name}" data-plan-status="${planStatus}"` : "";
+  const detailAttrs = !isPlanChat && normalizedType
+    ? ` data-chat-type="${normalizedType}" data-chat-role="${chat.userRole || ""}" data-chat-path="${chat.path}" data-chat-preview="${chat.preview}"`
+    : "";
+  const hasPathRoute = chat.path.includes("->") || chat.path.includes("→");
+  const chatType = chat.type || (isPlanChat ? (planStatus === "past" ? "Archived Plan Chat" : "Private Plan Chat") : chat.trusted ? "Trusted Friend Chat" : hasPathRoute ? "Direct Connection Chat" : "1:1 Chat");
+  const introActions = chat.introRequest ? `
+    <div class="intro-request-actions">
+      <button class="primary-mini" type="button" data-introduce>Introduce</button>
+      <button class="secondary-mini" type="button" data-intro-reply>Reply</button>
+      <button class="text-mini" type="button" data-intro-soft-decline>Not right now</button>
+    </div>
+  ` : "";
+  const context = isPlanChat
+    ? "Hosted by Amara · 4 attendees · Accepted"
+    : chat.introRequest
+      ? ""
+    : chat.path.includes("Trusted Friend")
+      ? "Trusted circle conversation."
+      : hasPathRoute
+        ? "Visible through a mutual introduction path."
+        : chat.preview;
+  return `
+    <article class="chat-card ${mode === "share" ? "share-mode" : ""} ${chat.introRequest ? "intro-request-card" : ""}" ${mode === "share" ? "" : `data-next="${destination}"${planAttrs}${detailAttrs}`} data-chat-name="${chat.name}">
+      <div class="avatar online" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <div class="meta"><h3>${chat.name}</h3><p>${chat.time}</p></div>
+        <span class="trust-badge relationship-badge">${chatType}</span><span class="muted-indicator" hidden aria-label="Muted"></span>
+        <p>${chat.preview}</p>
+        ${context ? `<small class="context-copy">${context}</small>` : ""}
+        ${introActions}
+      </div>
+      ${mode === "share" ? "" : `<div class="chat-card-utilities"><button class="chat-icon-button chat-mute-icon" type="button" data-chat-mute aria-label="Mute chat"></button><button class="chat-icon-button chat-archive-icon" type="button" data-chat-archive aria-label="Archive chat"></button></div>`}
+      ${action}
+    </article>
+  `;
+}
+
+function planShareComposer() {
+  const plan = selectedPlan();
+  const max = Math.min(plan.max || 6, 6);
+  return `
+    <section class="plan-share-composer">
+      <article class="plan-card share-plan-preview">
+        <div class="avatar" style="background:linear-gradient(145deg, #ffbfa3,#a79cff)"></div>
+        <div>
+          <h3>${plan.name}</h3>
+          <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${plan.viewerStatus === "pending" ? "Pending Approval" : "Open to Join"}</span></div>
+          <p>${plan.location} · ${plan.time}</p>
+          <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${plan.visibility}</span></div>
+          <small class="context-copy">Share this plan with someone trusted. They will still need host approval before chat unlocks.</small>
+        </div>
+      </article>
+      <div class="share-send-box">
+        <label>Send to<select><option>Laura Chen</option><option>Theo Jensen</option><option>Amara Okoye</option></select></label>
+        <label>Message<textarea placeholder="Add a short note">Thought you might like this trusted plan.</textarea></label>
+        <button class="primary-button" type="button">Send Plan</button>
+      </div>
+    </section>
+  `;
+}
+
+function planCard(plan, index = 0, compact = false) {
+  const max = Math.min(plan.max, 6);
+  const isHosting = plan.role === "hosting" || plan.mine;
+  const isAttending = plan.role === "attending";
+  const isPending = plan.role === "pending" || plan.viewerStatus === "pending";
+  const isPast = plan.role === "past" || plan.viewerStatus === "past";
+  const actionLabel = isHosting
+    ? (compact ? "Manage" : "Manage")
+    : isAttending || plan.viewerStatus === "accepted"
+      ? (compact ? "Open Chat" : "Open Group Chat")
+      : isPending
+        ? "Pending Approval"
+        : isPast
+          ? "View Chat History"
+          : "Request to Join";
+  const actionTarget = isHosting ? "edit-plan" : (isAttending || plan.viewerStatus === "accepted" || isPast) ? "plan-chat" : "plan-detail";
+  const spotsLeft = Math.max(0, max - plan.joined);
+  const statusBadge = isHosting ? "Hosting"
+    : isAttending || plan.viewerStatus === "accepted" ? "Attending"
+      : isPending ? "Pending Approval"
+        : isPast ? "Past Meetup"
+          : spotsLeft === 0 ? "Full" : "Open to Join";
+  const spotBadge = spotsLeft === 0 ? "Full" : `${spotsLeft} Spot${spotsLeft === 1 ? "" : "s"} Left`;
+  const visibilityBadge = plan.visibility.includes("Invite") ? "Invite Only"
+    : plan.visibility.includes("Trusted") ? "Trusted Circle Only"
+      : plan.visibility.includes("Mutual") ? "Mutuals Only"
+        : plan.visibility;
+  const planContext = isHosting
+    ? "You are hosting - manage requests before people enter chat."
+    : isAttending || plan.viewerStatus === "accepted"
+      ? "You are accepted - group chat is unlocked."
+      : isPending
+        ? "You requested to join - awaiting host approval."
+        : isPast
+          ? "This plan has ended - archived chat is read only."
+          : `Open to ${plan.visibility.toLowerCase()} visiting ${plan.location}.`;
+  return `
+    <article class="plan-card ${compact ? "compact" : ""} ${isPast ? "past-plan-card" : ""}">
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${plan.name}</h3>
+        <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${statusBadge}</span></div>
+        <p>${plan.path}</p>
+        <div class="plan-meta"><span>${plan.time}</span><span>${plan.location}</span></div>
+        <div class="plan-meta"><span>${plan.joined}/${max}</span><span>${spotBadge}</span><span>${visibilityBadge}</span></div>
+        <small class="context-copy">${planContext}</small>
+      </div>
+      <button data-next="${actionTarget}" data-plan-name="${plan.name}" data-plan-status="${plan.viewerStatus || plan.role || "discoverable"}">${actionLabel}</button>
+    </article>
+  `;
+}
+
+function myPlanCard(plan, index = 0) {
+  const max = Math.min(plan.max, 6);
+  const role = plan.role || (plan.mine ? "hosting" : "attending");
+  const isHosting = role === "hosting";
+  const isAttending = role === "attending";
+  const isPending = role === "pending";
+  const isPast = role === "past";
+  const hostLabel = isHosting ? "Hosted by You" : `Hosted by ${plan.host}`;
+  const statusBadge = isHosting ? "Host" : isAttending ? "Accepted" : isPending ? "Pending Approval" : "Past";
+  const pendingRequestCount = isHosting ? Number((plan.status || "").match(/\d+/)?.[0] || 0) : 0;
+  const context = isHosting
+    ? ""
+    : isAttending
+      ? "Accepted - chat unlocked."
+      : isPending
+        ? "Waiting for host confirmation before joining chat."
+        : "This plan has ended - archived chat is read only.";
+  const actions = isHosting
+    ? `<button data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Manage Plan</button><button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="hosting">Open Plan Chat</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share Plan</button>`
+    : isAttending
+      ? `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Plan Chat</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`
+      : isPending
+        ? `<button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="pending">Share Plan</button><button class="muted-plan-action" type="button">Cancel Request</button>`
+        : `<button class="muted-plan-action" data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="past">View Chat History</button>`;
+
+  return `
+    <article class="plan-card my-plan-role-card ${isPast ? "past-plan-card" : ""}">
+      ${isHosting ? `<button class="plan-request-bell" data-next="plan-requests" data-plan-name="${plan.name}" aria-label="${pendingRequestCount ? `${pendingRequestCount} pending requests` : "Plan requests"}"><svg class="bell-symbol" aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>${pendingRequestCount ? `<span class="bell-count">${pendingRequestCount}</span>` : ""}</button>` : ""}
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${plan.name}</h3>
+        <div class="plan-status-line"><span class="trust-badge">${hostLabel}</span><span class="trust-badge plan-state">${statusBadge}</span></div>
+        <p>${plan.location} · ${plan.time}</p>
+        <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${plan.visibility}</span></div>
+        ${context ? `<small class="context-copy">${context}</small>` : ""}
+      </div>
+      <div class="plan-card-actions">${actions}</div>
+    </article>
+  `;
+}
+
+function renderEditPlan() {
+  const plan = selectedPlan();
+  const hub = document.querySelector("#edit-plan .plan-management-hub");
+  const formLabels = document.querySelectorAll("#edit-plan .form-card > label");
+  const titleInput = formLabels[0]?.querySelector("input");
+  const locationInput = formLabels[1]?.querySelector("input");
+  const chatButton = document.querySelector("#edit-plan .chat-cta");
+  if (hub) {
+    hub.querySelector("strong").textContent = plan.name;
+    hub.querySelector("span").textContent = `${plan.time} · ${plan.location}`;
+  }
+  if (titleInput) titleInput.value = plan.name;
+  if (locationInput) locationInput.value = plan.location;
+  if (chatButton) {
+    chatButton.dataset.planName = plan.name;
+    chatButton.dataset.planStatus = "hosting";
+  }
+}
+
+function renderPlanChat() {
+  const plan = selectedPlan();
+  const isArchived = selectedPlanStatus === "past";
+  const isHost = selectedPlanStatus === "hosting" || plan.host === "You";
+  const isGuest = selectedPlanStatus === "accepted" && !isHost;
+  const title = document.querySelector("#plan-chat .chat-top strong");
+  const sub = document.querySelector("#plan-chat .chat-top span");
+  const status = document.querySelector("#planChatStatus");
+  const composer = document.querySelector("#planChatComposer");
+  const quickActions = document.querySelector("#plan-chat .chat-quick-actions");
+  const strip = document.querySelector("#plan-chat .participant-strip");
+  const reminder = document.querySelector("#plan-chat .plan-reminder");
+  const messages = document.querySelector("#plan-chat .plan-messages");
+  const hostLabel = plan.host === "You" ? "Hugo" : plan.host;
+  const hostFirst = hostLabel;
+  const participants = [hostFirst, "Laura", "Theo", plan.host === "You" ? "Amara" : "Hugo"];
+  const uniqueParticipants = [...new Set(participants)];
+  const profileNames = {
+    Amara: "Amara Okoye",
+    Hugo: "Hugo",
+    Laura: "Laura Chen",
+    Theo: "Theo Jensen",
+    Emma: "Emma Laurent",
+    Noah: "Noah Silva",
+    Camille: "Camille Roux",
+    Maya: "Maya Brooks"
+  };
+  if (title) title.textContent = plan.name;
+  if (sub) sub.textContent = `${plan.time} · ${plan.location}`;
+  if (status) {
+    status.innerHTML = isArchived
+      ? `<span class="trust-badge relationship-badge">Archived Plan Chat</span><small>Hosted by ${hostLabel} · ${uniqueParticipants.length} attendees · Read only</small>`
+      : `<span class="trust-badge relationship-badge">Private Plan Chat</span><small>Hosted by ${hostLabel} · ${uniqueParticipants.length} attendees</small>`;
+  }
+  if (composer) {
+    composer.classList.toggle("archived", isArchived);
+    composer.innerHTML = isArchived
+      ? `<div class="archived-status-bar">Archived after meetup · Read only</div>`
+      : `<input placeholder="Message the plan group" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button>`;
+  }
+  if (strip) {
+    const participantLinks = uniqueParticipants.map((name, index) => {
+      const isYou = name === "You";
+      const label = index === 0 ? `${name} (Host)` : name;
+      const profileName = profileNames[name] || name;
+      return isYou
+        ? `<button type="button">${label}</button>`
+        : `<button data-next="profile" data-profile-name="${profileName}">${label}</button>`;
+    }).join("<span>•</span>");
+    strip.innerHTML = `<div>${participantLinks}</div>`;
+  }
+  document.querySelector("#planRecapCard")?.remove();
+  if (isArchived && reminder && messages) {
+    const recap = document.createElement("section");
+    recap.className = "plan-recap-card";
+    recap.id = "planRecapCard";
+    recap.innerHTML = `
+      <span>Plan Recap</span>
+      <strong>${plan.name}</strong>
+      <small>${plan.time} · Hosted by ${plan.host}</small>
+      <div><span>4 attendees</span><span>12 messages</span><span>3 photos shared</span></div>
+    `;
+    reminder.insertBefore(recap, messages);
+  }
+  if (quickActions) {
+    quickActions.hidden = isArchived;
+    if (isArchived) {
+      quickActions.innerHTML = "";
+      return;
+    }
+    if (!isArchived && isHost) {
+      quickActions.innerHTML = `<button class="small-pill" data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Edit Plan</button><button class="small-pill" data-next="plan-requests" data-plan-name="${plan.name}">Review Requests</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share</button>`;
+    } else if (!isArchived && isGuest) {
+      quickActions.innerHTML = `<button class="small-pill" data-next="chats">Message Host</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button><button class="small-pill muted-plan-action" type="button">Leave Plan</button>`;
+    }
+  }
+}
+
+function renderHomePlans() {
+  const list = document.querySelector("#homePlans");
+  if (!list) return;
+  const plans = discoverablePlans.filter((plan) => (
+    !plan.mine &&
+    plan.role !== "attending" &&
+    plan.role !== "pending" &&
+    plan.viewerStatus === "discoverable" &&
+    plan.joined < Math.min(plan.max, 6)
+  ));
+  list.innerHTML = plans.length
+    ? plans.slice(0, 4).map(homePlanCard).join("")
+    : `<div class="empty-card">No trusted plans match this view yet.</div>`;
+}
+
+function renderTrustedPlans() {
+  const list = document.querySelector("#trustedPlansList");
+  if (!list) return;
+  list.innerHTML = discoverablePlans.map((plan, index) => planCard(plan, index)).join("");
+}
+
+function renderMyPlans() {
+  const list = document.querySelector("#myPlansList");
+  if (!list) return;
+  list.innerHTML = (myPlans[planFilter] || []).map(myPlanCard).join("");
+}
+
+function renderPersonPlans() {
+  const list = document.querySelector("#personPlansList");
+  if (!list) return;
+  const profile = selectedProfile();
+  document.querySelector("#person-plans h1").textContent = `${profile.name}'s Plans`;
+  document.querySelector("#person-plans .network-header p").textContent = `Plans ${profile.name.split(" ")[0]} is hosting, attending, or has completed.`;
+  const plans = profile.plans[planFilter] || profile.plans.hosting || [];
+  list.innerHTML = plans.length ? plans.map(personPlanCard).join("") : `<div class="empty-card">No visible plans.</div>`;
+}
+
+function personPlanCard(plan, index = 0) {
+  const isPast = plan.role === "past" || plan.viewerStatus === "past";
+  const viewerAccepted = plan.viewerStatus === "accepted" || plan.role === "attending";
+  const viewerPending = plan.viewerStatus === "pending";
+  const viewerAttended = Boolean(plan.viewerAttended || viewerAccepted || plan.host === "You");
+  const isInformationalPast = isPast && !viewerAttended;
+  const action = isInformationalPast ? ""
+    : isPast ? `<button class="muted-plan-action" data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="past">View Chat History</button>`
+      : viewerAccepted ? `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Chat</button>`
+        : viewerPending ? `<button class="muted-plan-action" type="button">Cancel Request</button><button data-next="chats">Message Host</button>`
+          : `<button data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">Request to Join</button>`;
+  const badge = isPast ? "Past" : viewerAccepted ? "Accepted" : viewerPending ? "Pending Approval" : "Open to Join";
+  const context = isInformationalPast
+    ? "Past plan - you did not attend."
+    : isPast
+      ? "You attended this past plan - archived chat is available."
+      : viewerAccepted
+        ? "You are accepted - group chat is unlocked."
+        : viewerPending
+          ? "Waiting for host approval before chat unlocks."
+          : "You can request to join this plan.";
+  return `
+    <article class="plan-card ${isPast ? "past-plan-card" : ""}">
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${plan.name}</h3>
+        <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${badge}</span></div>
+        <p>${plan.location} · ${plan.time}</p>
+        <div class="plan-meta"><span>${plan.joined}/${Math.min(plan.max, 6)} attending</span><span>${plan.visibility}</span></div>
+        <small class="context-copy">${context}</small>
+      </div>
+      ${action ? `<div class="plan-card-actions">${action}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderPlanDetail() {
+  const status = selectedPlanStatus;
+  const plan = selectedPlan();
+  const actionGrid = document.querySelector("#planDetailActions");
+  const joinNote = document.querySelector("#planJoinNote");
+  const attendees = document.querySelector("#planAttendees");
+  const heroBadge = document.querySelector("#planDetailBadge");
+  const hero = document.querySelector("#plan-detail .plan-hero");
+  const requestsButton = document.querySelector("#planDetailRequests");
+  if (hero) {
+    hero.querySelector("h1").textContent = plan.name;
+    hero.querySelector("p").textContent = `${plan.time} · ${plan.location}`;
+    hero.querySelector(".host-line strong").textContent = `Hosted by ${plan.host}`;
+    hero.querySelector(".host-line span").textContent = plan.path;
+  }
+  if (heroBadge) heroBadge.textContent = status === "hosting" ? "Hosting" : status === "accepted" ? "Accepted" : status === "pending" ? "Pending" : "Discoverable";
+  if (requestsButton) requestsButton.hidden = status !== "hosting";
+  if (joinNote) joinNote.hidden = status === "hosting" || status === "accepted" || status === "pending";
+  if (attendees) attendees.hidden = false;
+  if (!actionGrid) return;
+  if (status === "hosting") {
+    actionGrid.innerHTML = `<button data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Edit Plan</button><button data-next="plan-requests" data-plan-name="${plan.name}">View Requests</button><button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="hosting">Message Group</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share Plan</button>`;
+  } else if (status === "accepted") {
+    actionGrid.innerHTML = `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Group Chat</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`;
+  } else if (status === "pending") {
+    actionGrid.innerHTML = `<button disabled>Pending Approval</button><button data-cancel-plan-request>Cancel Request</button><button data-next="chats">Message Host</button>`;
+  } else {
+    actionGrid.innerHTML = `<button data-request-plan>Request to Join</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="discoverable">Share Plan</button>`;
+  }
+}
+
+function tripManagementActions(trip, options = {}) {
+  const canEdit = options.canEdit !== false;
+  return `
+    <div class="trip-card-actions" aria-label="Trip actions">
+      ${canEdit ? `<button type="button" data-edit-trip="${trip.id}">Edit</button>` : ""}
+      <button class="delete-trip-action" type="button" data-delete-trip="${trip.id}">Delete</button>
+    </div>
+  `;
+}
+
+function tripCard(trip, manageable = false) {
+  return `
+    <article class="trip-full-card ${manageable ? "manageable-trip-card" : ""}">
+      <strong>${trip.city}</strong>
+      <span class="trip-country">${trip.country}</span>
+      <span class="trip-dates">${displayTripRange(trip)}</span>
+      <span class="trust-badge">${trip.visibility}</span>
+      ${trip.status ? `<span class="trust-badge trip-status">${trip.status}</span>` : ""}
+      ${manageable ? tripManagementActions(trip) : ""}
+    </article>
+  `;
+}
+
+function pastTripCard(trip, manageable = false) {
+  return `
+    <article class="past-trip-card ${manageable ? "manageable-trip-card" : ""}">
+      <strong>${trip.city}</strong>
+      <span>${trip.country}</span>
+      <em>${displayTripRange(trip)}</em>
+      <small>Past</small>
+    </article>
+  `;
+}
+
+function tripsSections(trips, options = {}) {
+  const manageable = Boolean(options.manageable);
+  const upcoming = trips
+    .filter((trip) => !isPastTrip(trip))
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+  const past = trips
+    .filter(isPastTrip)
+    .sort((a, b) => new Date(b.start) - new Date(a.start));
+  return `
+    <section class="content-section"><h2>Upcoming Trips</h2><div class="people-stack upcoming-trip-list">${upcoming.length ? upcoming.map((trip) => tripCard(trip, manageable)).join("") : `<div class="empty-card">No visible upcoming trips.</div>`}</div></section>
+    <section class="content-section"><h2>Past Trips</h2><div class="past-trips-carousel">${past.length ? past.map((trip) => pastTripCard(trip, manageable)).join("") : `<div class="empty-card">No past trips visible.</div>`}</div></section>
+  `;
+}
+
+function requestCard(request, index = 0) {
+  const actions = request.actions
+    ? `<div class="request-actions"><button>Accept</button><button>Decline</button><button data-next="profile">View Profile</button></div>`
+    : `<div class="request-actions"><button data-next="profile">View Profile</button></div>`;
+  const requestContext = request.type.includes("Intro")
+    ? "Visible through a mutual path - decide whether to continue the introduction."
+    : request.type.includes("Trusted Friend")
+      ? "Met in person - can become trusted only after mutual acceptance."
+      : request.type.includes("meetup")
+        ? "Pending real-world confirmation before trust changes."
+        : "Track where this connection currently stands.";
+  return `
+    <article class="request-card">
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${request.name}</h3>
+        <p>${request.path}</p>
+        <span class="trust-badge">${request.type} · ${request.status}</span>
+        <small class="context-copy">${requestContext}</small>
+      </div>
+      ${actions}
+    </article>
+  `;
+}
+
+function renderConnectionRequests() {
+  const list = document.querySelector("#connectionRequestList");
+  if (!list) return;
+  list.innerHTML = connectionRequests[requestFilter].map(requestCard).join("");
+}
+
+function renderPlanRequests() {
+  const list = document.querySelector("#planRequestsList");
+  if (!list) return;
+  list.innerHTML = planJoinRequests.map((request, index) => `
+    <article class="request-card plan-request">
+      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+      <div>
+        <h3>${request.name}</h3>
+        <p>${request.path}</p>
+        <span class="trust-badge">${request.vouch}</span>
+        <p>${request.message}</p>
+      </div>
+      <div class="request-actions"><button data-next="plan-chat">Accept</button><button>Reject</button></div>
+    </article>
+  `).join("");
+}
+
+function networkPersonMatches(person, group, query) {
+  const haystack = `${person.name} ${person.city || ""} ${person.path || ""} ${person.badge || ""}`.toLowerCase();
+  const activeTrip = getSelectedHomeTrip();
+  if (query && !haystack.includes(query)) return false;
+  if (networkFilter === "trusted") return group === "trusted";
+  if (networkFilter === "mutuals") return group === "second";
+  if (networkFilter === "nearby") return personLivesInTripCity(person, activeTrip) || personVisitsTripCity(person, activeTrip);
+  if (networkFilter === "met") return group === "met";
+  if (networkFilter === "travelling") return Boolean(person.trips?.length);
+  return true;
+}
+
+function renderNetworkLists() {
+  const query = document.querySelector("#networkSearch")?.value.trim().toLowerCase() || "";
+  const groups = [
+    { key: "trusted", selector: ".network-cards", people: networkPeople },
+    { key: "met", selector: ".met-cards", people: metPeople },
+    { key: "second", selector: ".trusted-cards", people: secondDegreePeople },
+    { key: "third", selector: ".third-degree-cards", people: thirdDegreePeople }
+  ];
+  groups.forEach((group) => {
+    const target = document.querySelector(group.selector);
+    if (!target) return;
+    const section = target.closest(".content-section");
+    const people = group.people.filter((person) => networkPersonMatches(person, group.key, query));
+    if (section) section.hidden = !people.length;
+    target.innerHTML = people.map(personCard).join("");
+  });
+}
+
+function getSearchResults() {
+  const query = document.querySelector("#homeSearch")?.value.trim().toLowerCase() || "";
+  const selectedContext = getHomeSelectorContext();
+  let results = query
+    ? homePeople.filter((person) => `${person.name} ${person.city} ${person.country}`.toLowerCase().includes(query))
+    : [...homePeople];
+
+  if (homeFilter !== "all") {
+    results = results.filter((person) => personMatchesSelectedTrip(person, selectedContext));
+  } else {
+    results = results.sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)));
+  }
+  return { query, results };
+}
+
+function renderHomeTripSelect() {
+  const select = document.querySelector("#homeTripSelect");
+  if (!select) return;
+  const tripOptions = visibleHomeTrips();
+  const cityOptions = homeCityOptions();
+  if (homeFilter === "same") {
+    select.setAttribute("aria-label", "Choose trip dates");
+    select.innerHTML = tripOptions.map((trip) => `<option value="${trip.id}">${homeTripOptionLabel(trip)}</option>`).join("");
+    if (!tripOptions.some((trip) => trip.id === activeHomeTripId)) {
+      activeHomeTripId = tripOptions[0]?.id || activeHomeTripId;
+    }
+    activeHomeSelectorValue = activeHomeTripId;
+  } else if (homeFilter === "in-town" || homeFilter === "locals") {
+    select.setAttribute("aria-label", "Choose city");
+    select.innerHTML = cityOptions.map((city) => `<option value="city:${city}">${city}</option>`).join("");
+    activeHomeSelectorValue = `city:${activeHomeCity}`;
+  } else {
+    select.innerHTML = "";
+    return;
+  }
+  if (![...select.options].some((option) => option.value === activeHomeSelectorValue)) {
+    activeHomeSelectorValue = select.options[0]?.value || activeHomeSelectorValue;
+  }
+  select.value = activeHomeSelectorValue;
+}
+
+function renderHomeFilterTabs() {
+  const selectedTrip = getSelectedHomeTrip();
+  const sameDatesTab = document.querySelector('[data-home-filter="same"]');
+  if (!sameDatesTab) return;
+  const hasActiveTrip = Boolean(selectedTrip?.city && selectedTrip?.start);
+  sameDatesTab.hidden = !hasActiveTrip;
+  if (!hasActiveTrip && homeFilter === "same") {
+    homeFilter = "all";
+    document.querySelectorAll("[data-home-filter]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.homeFilter === "all");
+    });
+  }
+}
+
+function renderHomePeople() {
+  const nearby = document.querySelector("#nearbyPeople");
+  if (!nearby) return;
+  document.querySelector("#homeResultSummary")?.remove();
+  renderHomeFilterTabs();
+  const { query, results } = getSearchResults();
+  const title = document.querySelector("#homePeopleTitle");
+  const datePill = document.querySelector("#homePeopleDates");
+  if (title) title.textContent = query ? `People in ${query.replace(/\b\w/g, (char) => char.toUpperCase())}` : "Trusted People Nearby";
+  if (datePill) {
+    datePill.hidden = homeFilter === "all";
+    if (homeFilter !== "all") renderHomeTripSelect();
+  }
+  nearby.innerHTML = results.length
+    ? results.slice(0, 3).map(personCard).join("")
+    : `<div class="empty-card">No trusted matches yet. Try another city or switch filters.</div>`;
+}
+
+function renderHomeSuggestions() {
+  const suggested = document.querySelector("#suggestedPeople");
+  if (!suggested) return;
+  const people = suggestedConnections();
+  suggested.innerHTML = people.length
+    ? people.slice(0, 3).map(personCard).join("")
+    : `<div class="empty-card">No suggested introductions yet. Add a trip or trusted connection to improve matching.</div>`;
+}
+
+function renderNetworkMovement() {
+  const row = document.querySelector("#networkMovement");
+  if (!row) return;
+  row.innerHTML = networkMovements.map((item) => `
+    <button class="network-movement-card" type="button">
+      <span>${item.tag}</span>
+      <strong>${item.title}</strong>
+      <small>${item.detail}</small>
+    </button>
+  `).join("");
+}
+
+function renderSuggestedConnectionsPage() {
+  const list = document.querySelector("#suggestedPeopleAll");
+  if (!list) return;
+  const people = suggestedConnections();
+  list.innerHTML = people.length
+    ? people.map(personCard).join("")
+    : `<div class="empty-card">No suggested introductions yet. Add a trip or trusted connection to improve matching.</div>`;
+}
+
+function renderNearbyPeoplePage() {
+  const list = document.querySelector("#nearbyPeopleAll");
+  if (!list) return;
+  const { query, results } = getSearchResults();
+  const title = document.querySelector("#nearbyPeoplePageTitle");
+  const copy = document.querySelector("#nearbyPeoplePageCopy");
+  const selectedTrip = getSelectedHomeTrip();
+  const filterLabel = document.querySelector(`[data-home-filter="${homeFilter}"]`)?.textContent || "All";
+  if (title) title.textContent = query ? `People in ${query.replace(/\b\w/g, (char) => char.toUpperCase())}` : "Trusted People Nearby";
+  if (copy) {
+    const context = getHomeSelectorContext();
+    const contextLabel = context.type === "trip" ? tripRangeLabel(context.trip) : context.city;
+    copy.textContent = `${results.length} ${filterLabel.toLowerCase()} match${results.length === 1 ? "" : "es"} for ${contextLabel}.`;
+  }
+  list.innerHTML = results.length
+    ? results.map(personCard).join("")
+    : `<div class="empty-card">No trusted matches yet. Try another city or switch filters.</div>`;
+}
+
+function renderAllTrips() {
+  const list = document.querySelector("#allTripsList");
+  const copy = document.querySelector("#allTripsCopy");
+  if (!list) return;
+  const upcomingCount = myTrips.filter((trip) => !isPastTrip(trip)).length;
+  if (copy) copy.textContent = `${upcomingCount} upcoming trip${upcomingCount === 1 ? "" : "s"}`;
+  list.innerHTML = tripsSections(myTrips, { manageable: true });
+}
+
+function renderPersonTrips() {
+  const list = document.querySelector("#personTripsList");
+  if (!list) return;
+  const profile = selectedProfile();
+  document.querySelector("#person-trips h1").textContent = `${profile.name}'s Trips`;
+  list.innerHTML = tripsSections(profile.trips);
+}
+
+function renderChats() {
+  const list = document.querySelector(".chat-list");
+  if (!list) return;
+  const headerCopy = document.querySelector("#chatContextCopy");
+  const headerTitle = document.querySelector("#chats .compact-header h1");
+  const tabs = document.querySelector("#chats .chat-tabs");
+  const source = chatMode === "share" ? shareContacts : chats[chatFilter];
+  if (headerTitle) headerTitle.textContent = chatMode === "plan-share" ? "Share Plan" : "Chats";
+  if (tabs) tabs.hidden = chatMode === "plan-share";
+  if (headerCopy) {
+    if (chatMode === "plan-share") {
+      headerCopy.textContent = "Send this trusted plan to someone in your circle.";
+    } else if (chatMode === "share") {
+      headerCopy.textContent = "Choose a trusted contact to share Emma's profile with.";
+    } else if (chatFilter === "plans") {
+      headerCopy.textContent = "Trusted Plan group chats only.";
+    } else {
+      headerCopy.textContent = "Trusted conversations only.";
+    }
+  }
+  list.innerHTML = chatMode === "plan-share"
+    ? planShareComposer()
+    : source.map((chat, index) => chatCard(chat, index, chatMode)).join("");
+}
+
+function renderChatDetail() {
+  const screen = document.querySelector("#chat-detail .chat-detail");
+  if (!screen) return;
+  const chatName = selectedChatName || "Emma Laurent";
+  const chatPath = selectedChatPath || "You → Laura → Emma";
+  const chatPreview = selectedChatPreview || "Friday works. Laura vouched for you.";
+  const chatProfileName = personProfiles[chatName] ? chatName : "Emma Laurent";
+
+  if (activeChatDetailMode === "intro-request" || activeChatDetailMode === "intro_request") {
+    screen.innerHTML = `
+      <header class="chat-top direct-chat-top">
+        <div class="avatar-img"></div>
+        <div><strong>Intro Request</strong><span>Hugo → Emma via Laura</span></div>
+      </header>
+      <div class="direct-chat-actions compact-chat-actions intro-request-compact-actions">
+        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
+      </div>
+      <div class="messages">
+        <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.</p>
+        <div class="intro-request-actions chat-detail-intro-actions">
+          <button class="primary-mini" type="button" data-introduce>Introduce</button>
+          <button class="secondary-mini" type="button" data-intro-reply>Reply</button>
+          <button class="text-mini" type="button" data-intro-soft-decline>Not right now</button>
+        </div>
+      </div>
+      <div class="composer"><input placeholder="Reply to Hugo" value="Happy to intro - what are you hoping to connect on?" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+    `;
+    return;
+  }
+
+  if (activeChatDetailMode === "intro-group") {
+    const isIntroducerView = !introThreadLeft;
+    const footerActions = isIntroducerView
+      ? `<div class="intro-chat-footer-actions"><button type="button">Mute Chat</button><button type="button" data-leave-intro-chat>Leave Chat</button></div>`
+      : "";
+    screen.innerHTML = `
+      <header class="chat-top intro-chat-top">
+        <div class="avatar-img"></div>
+        <div><strong>Hugo & Emma</strong><span>Introduced by Laura</span></div>
+      </header>
+      <div class="direct-chat-actions compact-chat-actions">
+        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
+        <button data-next="person-trips" data-profile-name="Emma Laurent">Trips</button>
+        <button data-next="person-plans" data-profile-name="Emma Laurent">Plans</button>
+      </div>
+      <div class="messages">
+        <p class="bubble theirs">Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel.</p>
+        <p class="bubble mine">Thank you Laura. Emma, lovely to meet you here.</p>
+        <p class="bubble theirs">Likewise. I have a gallery afternoon saved for Saturday if you are around.</p>
+      </div>
+      ${isIntroducerView ? "" : `<button class="meetup-button" data-next="verify">Confirm Meetup</button>`}
+      ${footerActions}
+      <div class="composer"><input placeholder="Write a message" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+    `;
+    return;
+  }
+
+  if (activeChatDetailMode === "direct-connection" || activeChatDetailMode === "direct_connection_chat") {
+    screen.innerHTML = `
+      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>${chatPath} · Not yet Met</span></div></header>
+      <div class="direct-chat-actions compact-chat-actions">
+        <button data-next="profile" data-profile-name="${chatProfileName}">Profile</button>
+        <button data-next="person-trips" data-profile-name="${chatProfileName}">Trips</button>
+        <button data-next="person-plans" data-profile-name="${chatProfileName}">Plans</button>
+      </div>
+      <div class="messages">
+        <p class="bubble theirs">${chatPreview}</p>
+        <p class="bubble mine">Perfect. I am in Barcelona from Thursday and would love that.</p>
+      </div>
+      <button class="meetup-button" data-next="verify">Confirm Meetup</button>
+      <div class="composer"><input placeholder="Message ${chatName.split(" ")[0]}" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+    `;
+    return;
+  }
+
+  screen.innerHTML = `
+    <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>Trusted Friend · 1st Degree</span></div></header>
+    <div class="direct-chat-actions compact-chat-actions">
+      <button data-next="profile" data-profile-name="${chatProfileName}">Profile</button>
+      <button data-next="person-trips" data-profile-name="${chatProfileName}">Trips</button>
+      <button data-next="person-plans" data-profile-name="${chatProfileName}">Plans</button>
+    </div>
+    <div class="messages"><p class="bubble theirs">${chatPreview}</p><p class="bubble mine">Thank you. I will send a warm note.</p></div>
+    <div class="composer"><input placeholder="Message ${chatName.split(" ")[0]}" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+  `;
+}
+
+function confirmIntroduce() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Introduce Hugo and Emma">
+      <h2>Introduce Hugo and Emma?</h2>
+      <p>You can edit the note before opening the shared intro chat.</p>
+      <textarea id="introComposeMessage">Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel.</textarea>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-send-intro-message>Send Intro</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function confirmIntroSoftDecline() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Not right now">
+      <h2>Not right now?</h2>
+      <p>Keep it soft. You can send a note or close this without replying.</p>
+      <textarea>Not right now, but happy to reconnect another time.</textarea>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-dialog-close>Send note</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function confirmArchiveChat(chatName = "this chat") {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Archive chat">
+      <h2>Archive chat?</h2>
+      <p>This will remove the conversation from your inbox, but the history will remain available where relevant.</p>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-confirm-archive-chat>Archive Chat</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function showPhotoSourceSheet() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Add photo">
+      <h2>Add photo</h2>
+      <p>Share a photo into this conversation.</p>
+      <div><button type="button" data-dialog-close>Take Photo</button><button type="button" data-dialog-close>Choose From Library</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function confirmLeaveIntroChat() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Leave intro chat">
+      <h2>Leave intro chat?</h2>
+      <p>You introduced Hugo and Emma. Leaving now will remove you from this conversation, but they can continue chatting directly.</p>
+      <p>You can still view this introduction later in your archive.</p>
+      <div><button type="button" data-dialog-close>Stay</button><button type="button" data-confirm-leave-intro>Leave Chat</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function renderVerification(method = "qr") {
+  stopVerificationCountdown();
+  verificationMethod = method;
+  const panel = document.querySelector("#verificationPanel");
+  if (!panel) return;
+  const cta = document.querySelector("[data-complete-verification]");
+  if (cta) cta.disabled = false;
+  const views = {
+    qr: `
+      <div class="verify-card qr-confirm">
+        <div class="real-qr asset-qr"><img src="./assets/personal-key-qr.png" alt="Meetup confirmation QR code" /></div>
+        <strong>Scan Emma's meetup QR</strong>
+        <span>QR confirms you met in person. Emma becomes a Trusted Friend only after both people accept and a slot is available.</span>
+      </div>
+    `,
+    location: `
+      <div class="verify-card location-confirm">
+        <div class="location-pulse"><i></i><i></i></div>
+        <strong>Phone location check</strong>
+        <span>You and Emma need to be in the same place. Same-location verification supports a Trusted Friend upgrade, not automatic network access.</span>
+        <small>You: 12m nearby · Emma: waiting to confirm</small>
+      </div>
+    `,
+    mutual: `
+      <div class="verify-card mutual-confirm">
+        <strong>Timed mutual confirmation</strong>
+        <span>Both people must tap yes on their own phone within 10 minutes before the Trusted Friend request can complete.</span>
+        <div class="confirm-row"><span>You</span><strong>Ready to confirm</strong></div>
+        <div class="confirm-row"><span>Emma</span><strong>Waiting</strong></div>
+        <div class="confirm-row"><span>Window</span><strong id="mutualCountdown">10:00</strong></div>
+      </div>
+    `
+  };
+  panel.innerHTML = views[method];
+  if (cta) {
+    const labels = {
+      qr: "Complete QR Scan",
+      location: "Confirm Same Location",
+      mutual: "Confirm on This Phone"
+    };
+    cta.textContent = labels[method];
+  }
+  if (method === "mutual") startVerificationCountdown();
+}
+
+function completeVerification() {
+  stopVerificationCountdown();
+  const panel = document.querySelector("#verificationPanel");
+  const cta = document.querySelector("[data-complete-verification]");
+  if (!panel || !cta) return;
+
+  cta.disabled = true;
+  cta.textContent = "Confirming...";
+
+  const copy = {
+    qr: ["QR matched", "Both phones confirmed an in-person meetup. Checking Trusted Friend slot now."],
+    location: ["Same place confirmed", "Both phones were verified in the same location. Checking Trusted Friend slot now."],
+    mutual: ["Both people confirmed", "You and Emma tapped yes within the meetup window. Checking Trusted Friend slot now."]
+  };
+
+  panel.innerHTML = `
+    <div class="verify-card confirmation-complete">
+      <div class="confirmed-mark"></div>
+      <strong>${copy[verificationMethod][0]}</strong>
+      <span>${copy[verificationMethod][1]}</span>
+    </div>
+  `;
+
+  window.setTimeout(() => {
+    instagramAccessUnlocked = true;
+    trustedFriendState.used = Math.min(currentTrustedFriendCap(), trustedFriendState.used + 1);
+    cta.disabled = false;
+    showScreen("unlocked", { replace: true });
+    cta.textContent = "Complete Verification";
+    renderVerification("qr");
+  }, 850);
+}
+
+function renderCityMutuals(city) {
+  const title = document.querySelector("#cityMutualTitle");
+  const copy = document.querySelector("#cityMutualCopy");
+  const list = document.querySelector("#cityMutualPeople");
+  const people = cityMutuals[city] || [];
+  if (title) title.textContent = city;
+  if (copy) copy.textContent = `${people.length} trusted people reachable through mutual paths.`;
+  if (list) list.innerHTML = people.map(personCard).join("");
+}
+
+function renderClusterNetwork(name, state) {
+  const card = document.querySelector(".cluster-card");
+  const panel = document.querySelector("#personNetworkPanel");
+  if (!card || !panel) return;
+  const network = clusterNetworks[name] || { state, path: "Trusted path pending", people: ["Locked", "Locked", "Locked"] };
+  const isLocked = (network.state || state) === "locked";
+  card.classList.add("has-network");
+  card.querySelectorAll("[data-cluster-person]").forEach((person) => {
+    person.classList.toggle("focused", person.dataset.clusterPerson === name);
+  });
+  panel.innerHTML = `
+    <div class="person-network-card ${isLocked ? "locked-preview" : "unlocked-preview"}">
+      <div>
+        <strong>${isLocked ? "Locked network" : `${name}'s network`}</strong>
+        <span>${isLocked ? `${name}'s circle stays blurred until trust is unlocked.` : network.path}</span>
+      </div>
+      <div class="micro-network" aria-label="${name}'s network preview">
+        ${network.people.map((person) => `<span class="micro-node">${isLocked ? "" : person}</span>`).join("")}
+      </div>
+      <button class="network-action" data-next="${isLocked ? "request-intro" : "profile"}">${isLocked ? "Request Intro" : "Open Profile"}</button>
+    </div>
+  `;
+}
+
+function renderIntroMethod(method = "mutual") {
+  introMethod = method;
+  document.querySelector("#introPreview")?.remove();
+  const profile = selectedProfile();
+  const parts = pathParts(profile.path || "");
+  const mutualName = parts.length >= 3 ? parts[1] : "Laura";
+  const firstName = profile.name.split(" ")[0];
+  const title = document.querySelector("#introTitle");
+  const pathLine = document.querySelector("#introPathLine");
+  const note = document.querySelector("#introMethodNote");
+  const message = document.querySelector("#introMessage");
+  const cta = document.querySelector("[data-send-intro]");
+  const recipient = document.querySelector("#introRecipient");
+  if (title) title.textContent = method === "mutual" ? `Request intro to ${firstName} via ${mutualName}` : `Request ${firstName} directly`;
+  if (pathLine) pathLine.textContent = method === "mutual" ? `Connected via ${mutualName}` : `Direct request to ${firstName}`;
+  if (method === "mutual") {
+    if (recipient) recipient.innerHTML = `<span>Send ${mutualName} a note</span><strong>${mutualName}</strong>`;
+    if (note) note.textContent = `This lands as a normal chat with ${mutualName}, not a formal approval request.`;
+    if (message && !message.value.trim()) message.value = `Hey ${mutualName} - would love an intro to ${firstName} if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.`;
+    if (cta) cta.textContent = "Send Request";
+  } else {
+    if (recipient) recipient.innerHTML = `<span>Sending to</span><strong>${profile.name}</strong>`;
+    if (note) note.textContent = `This goes directly to ${firstName}. Your profile stays partially hidden until ${firstName} accepts.`;
+    if (message) message.value = `Hey ${firstName} - ${mutualName} is our mutual connection. I would love to connect if it feels right.`;
+    if (cta) cta.textContent = `Send to ${firstName}`;
+  }
+}
+
+function setPrivacyMode(selected) {
+  const modes = [...document.querySelectorAll("[data-privacy-mode]")];
+  if (!modes.length) return;
+
+  if (!selected) {
+    const hasActive = modes.some((option) => option.classList.contains("active"));
+    if (!hasActive) modes[0].classList.add("active");
+  } else {
+    const activeCount = modes.filter((option) => option.classList.contains("active")).length;
+    const isActive = selected.classList.contains("active");
+    if (!(isActive && activeCount === 1)) {
+      selected.classList.toggle("active");
+    }
+  }
+
+  modes.forEach((option) => {
+    option.setAttribute("aria-pressed", option.classList.contains("active") ? "true" : "false");
+  });
+}
+
+function renderOnboardingCarousel() {
+  const track = document.querySelector("#onboardingTrack");
+  const dots = document.querySelector("#onboardingDots");
+  if (!track || !dots) return;
+  const slides = [...track.querySelectorAll(".onboarding-slide")];
+  onboardingSlide = Math.min(Math.max(onboardingSlide, 0), slides.length - 1);
+  track.scrollTo({ left: track.clientWidth * onboardingSlide, behavior: "smooth" });
+  dots.innerHTML = slides.map((_, index) => (
+    `<button type="button" class="${index === onboardingSlide ? "active" : ""}" data-onboarding-dot="${index}" aria-label="Go to intro slide ${index + 1}"></button>`
+  )).join("");
+}
+
+function startOnboardingAutoPlay() {
+  const track = document.querySelector("#onboardingTrack");
+  if (!track) return;
+  window.clearInterval(onboardingTimer);
+  onboardingTimer = window.setInterval(() => {
+    const slides = track.querySelectorAll(".onboarding-slide").length;
+    onboardingSlide = (onboardingSlide + 1) % slides;
+    renderOnboardingCarousel();
+  }, 3600);
+}
+
+function resetOnboardingAutoPlay() {
+  startOnboardingAutoPlay();
+}
+
+function hydrateLists() {
+  renderOnboardingCarousel();
+  startOnboardingAutoPlay();
+  renderHomePeople();
+  renderHomePlans();
+  renderHomeSuggestions();
+  renderNetworkMovement();
+  renderNetworkLists();
+  renderTrustCaps();
+  renderChats();
+  renderVerification("qr");
+  renderTrustedPlans();
+  renderConnectionRequests();
+  renderPlanRequests();
+}
+
+function closeCluster() {
+  const sky = document.querySelector(".city-sky");
+  if (!sky) return;
+  sky.classList.remove("expanded");
+  const card = document.querySelector(".cluster-card");
+  card?.classList.remove("open", "has-network");
+  document.querySelector("#personNetworkPanel")?.replaceChildren();
+  document.querySelectorAll("[data-cluster-person]").forEach((person) => person.classList.remove("focused"));
+  document.querySelectorAll(".city-node").forEach((node) => node.classList.remove("active"));
+}
+
+function bindInteractions() {
+  document.querySelector("#homeSearch")?.addEventListener("input", () => {
+    renderHomePeople();
+    renderHomePlans();
+    renderHomeSuggestions();
+  });
+  document.querySelector("#networkSearch")?.addEventListener("input", renderNetworkLists);
+  let swipeBackStart = null;
+
+  document.querySelector("#homeTripSelect")?.addEventListener("change", (event) => {
+    activeHomeSelectorValue = event.target.value;
+    if (activeHomeSelectorValue.startsWith("city:")) {
+      activeHomeCity = activeHomeSelectorValue.replace("city:", "");
+    } else {
+      activeHomeTripId = activeHomeSelectorValue;
+      activeHomeCity = (tripById(activeHomeTripId) || getSelectedHomeTrip()).city;
+      homeTripDateRange = tripRangeLabel(getSelectedHomeTrip()).split(" · ")[1] || homeTripDateRange;
+    }
+    renderHomePeople();
+    renderHomePlans();
+  });
+
+  const onboardingTrack = document.querySelector("#onboardingTrack");
+  if (onboardingTrack) {
+    let swipeStart = 0;
+    onboardingTrack.addEventListener("pointerdown", (event) => {
+      swipeStart = event.clientX;
+    });
+    onboardingTrack.addEventListener("pointerup", (event) => {
+      const delta = event.clientX - swipeStart;
+      if (Math.abs(delta) < 36) return;
+      const slides = onboardingTrack.querySelectorAll(".onboarding-slide").length;
+      onboardingSlide = Math.min(Math.max(onboardingSlide + (delta < 0 ? 1 : -1), 0), slides - 1);
+      renderOnboardingCarousel();
+      resetOnboardingAutoPlay();
+    });
+  }
+
+  document.addEventListener("input", (event) => {
+    const screen = event.target.closest(".screen");
+    if (screen && dirtyScreens.has(screen.dataset.screen) && !event.target.closest("#homeSearch")) {
+      screen.dataset.dirty = "true";
+    }
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (event.clientX > 28 || rootScreens.has(activeScreenId())) return;
+    if (event.target.closest(".onboarding-track, .plan-preview-stack, .profile-carousel, .mini-card-row, .unlock-strip, .testimonial-row, input, textarea, select, button")) return;
+    swipeBackStart = { x: event.clientX, y: event.clientY };
+  });
+
+  document.addEventListener("pointerup", (event) => {
+    if (!swipeBackStart) return;
+    const deltaX = event.clientX - swipeBackStart.x;
+    const deltaY = Math.abs(event.clientY - swipeBackStart.y);
+    swipeBackStart = null;
+    if (deltaX > 86 && deltaY < 54) goBack();
+  });
+
+  document.addEventListener("click", (event) => {
+    const profileMenuToggle = event.target.closest("[data-profile-menu]");
+    const profileMenu = document.querySelector("#profileMenu");
+    if (profileMenuToggle) {
+      profileMenu?.classList.toggle("open");
+      return;
+    }
+    if (profileMenu && !event.target.closest("#profileMenu")) {
+      profileMenu.classList.remove("open");
+    }
+
+    const back = event.target.closest("[data-back]");
+    if (back) {
+      goBack();
+      return;
+    }
+
+    if (event.target.closest("[data-dialog-close]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      return;
+    }
+
+    if (event.target.closest("[data-send-intro-message]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      introThreadStarted = true;
+      introThreadLeft = false;
+      activeChatDetailMode = "intro-group";
+      showScreen("chat-detail");
+      return;
+    }
+
+    if (event.target.closest("[data-confirm-leave-intro]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      introThreadLeft = true;
+      activeChatDetailMode = "intro-group";
+      renderChatDetail();
+      return;
+    }
+
+    if (event.target.closest("[data-confirm-archive-chat]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      pendingArchiveChatCard?.remove();
+      pendingArchiveChatCard = null;
+      showUtilityFeedback("Chat archived", "The conversation left your inbox. History remains available where relevant.");
+      return;
+    }
+
+    const onboardingDot = event.target.closest("[data-onboarding-dot]");
+    if (onboardingDot) {
+      onboardingSlide = Number(onboardingDot.dataset.onboardingDot);
+      renderOnboardingCarousel();
+      resetOnboardingAutoPlay();
+      return;
+    }
+
+    const tripSave = event.target.closest("[data-trip-save]");
+    if (tripSave) {
+      if (tripEditorMode === "edit") {
+        saveEditedTrip();
+        return;
+      }
+      updateHomeTripDateRange();
+      markScreenClean("trip");
+      if (tripReturnTarget === "trusted") renderTrustedMode("onboarding");
+      showScreen(tripReturnTarget);
+      return;
+    }
+
+    const tripSkip = event.target.closest("[data-trip-skip]");
+    if (tripSkip) {
+      tripEditorMode = "create";
+      editingTripId = null;
+      markScreenClean("trip");
+      if (tripReturnTarget === "trusted") renderTrustedMode("onboarding");
+      showScreen(tripReturnTarget);
+      return;
+    }
+
+    const editTrip = event.target.closest("[data-edit-trip]");
+    if (editTrip) {
+      tripEditorMode = "edit";
+      editingTripId = editTrip.dataset.editTrip;
+      tripReturnTarget = "all-trips";
+      showScreen("trip");
+      return;
+    }
+
+    const deleteTrip = event.target.closest("[data-delete-trip]");
+    if (deleteTrip) {
+      confirmDeleteTrip(deleteTrip.dataset.deleteTrip);
+      return;
+    }
+
+    const removeConnection = event.target.closest("[data-remove-connection]");
+    if (removeConnection) {
+      confirmRemoveConnection(removeConnection.dataset.removeConnection);
+      return;
+    }
+
+    const requestReconnect = event.target.closest("[data-request-reconnect]");
+    if (requestReconnect) {
+      confirmReconnection(requestReconnect.dataset.requestReconnect);
+      return;
+    }
+
+    const shareContact = event.target.closest("[data-share-contact]");
+    if (shareContact) {
+      shareContact.textContent = "Shared";
+      shareContact.classList.add("shared");
+      return;
+    }
+
+    const chatMute = event.target.closest("[data-chat-mute]");
+    if (chatMute) {
+      const card = chatMute.closest(".chat-card");
+      const indicator = card?.querySelector(".muted-indicator");
+      const isMuted = card?.classList.contains("is-muted");
+      if (indicator) indicator.hidden = isMuted;
+      card?.classList.toggle("is-muted", !isMuted);
+      card?.querySelectorAll("[data-chat-mute]").forEach((button) => {
+        button.setAttribute("aria-label", isMuted ? "Mute chat" : "Unmute chat");
+      });
+      showUtilityFeedback(isMuted ? "Chat unmuted" : "Chat muted", isMuted ? "Push notifications are back on for this conversation." : "Messages still arrive, but push notifications are paused.");
+      return;
+    }
+
+    const chatArchive = event.target.closest("[data-chat-archive]");
+    if (chatArchive) {
+      const card = chatArchive.closest(".chat-card");
+      pendingArchiveChatCard = card;
+      confirmArchiveChat(card?.dataset.chatName || "this chat");
+      return;
+    }
+
+    const introduce = event.target.closest("[data-introduce]");
+    if (introduce) {
+      confirmIntroduce();
+      return;
+    }
+
+    const introReply = event.target.closest("[data-intro-reply]");
+    if (introReply) {
+      activeChatDetailMode = "intro-request";
+      showScreen("chat-detail");
+      return;
+    }
+
+    const introSoftDecline = event.target.closest("[data-intro-soft-decline]");
+    if (introSoftDecline) {
+      confirmIntroSoftDecline();
+      return;
+    }
+
+    const leaveIntroChat = event.target.closest("[data-leave-intro-chat]");
+    if (leaveIntroChat) {
+      confirmLeaveIntroChat();
+      return;
+    }
+
+    const muteChat = event.target.closest(".intro-chat-footer-actions button:not([data-leave-intro-chat]), .direct-chat-actions button:not([data-next])");
+    if (muteChat) {
+      muteChat.classList.toggle("active");
+      showUtilityFeedback(muteChat.classList.contains("active") ? "Chat muted" : "Chat unmuted", muteChat.classList.contains("active") ? "Messages still arrive, but push notifications are paused." : "Push notifications are back on for this conversation.");
+      return;
+    }
+
+    const addFriends = event.target.closest("[data-add-friends]");
+    if (addFriends) {
+      renderTrustedMode("add-friends");
+      showScreen("trusted");
+      return;
+    }
+
+    const qrShortcut = event.target.closest("[data-qr-shortcut]");
+    if (qrShortcut) {
+      const current = document.querySelector(".screen.active")?.dataset.screen || "home";
+      renderQrRevealMode(current);
+      showScreen("qr-reveal");
+      return;
+    }
+
+    const filter = event.target.closest("[data-home-filter]");
+    if (filter) {
+      homeFilter = filter.dataset.homeFilter;
+      if (homeFilter === "same") activeHomeSelectorValue = activeHomeTripId;
+      if (homeFilter === "in-town" || homeFilter === "locals") activeHomeSelectorValue = `city:${activeHomeCity}`;
+      filter.parentElement.querySelectorAll("button").forEach((button) => button.classList.remove("active"));
+      filter.classList.add("active");
+      renderHomePeople();
+      renderHomePlans();
+      renderHomeSuggestions();
+      return;
+    }
+
+    const chatTab = event.target.closest("[data-chat-filter]");
+    if (chatTab) {
+      chatMode = "default";
+      chatFilter = chatTab.dataset.chatFilter;
+      chatTab.parentElement.querySelectorAll("button").forEach((button) => button.classList.remove("active"));
+      chatTab.classList.add("active");
+      renderChats();
+      return;
+    }
+
+    const planTab = event.target.closest("[data-plan-filter]");
+    if (planTab) {
+      planFilter = planTab.dataset.planFilter;
+      planTab.parentElement.querySelectorAll("button").forEach((button) => button.classList.remove("active"));
+      planTab.classList.add("active");
+      renderTrustedPlans();
+      renderMyPlans();
+      renderPersonPlans();
+      return;
+    }
+
+    const requestTab = event.target.closest("[data-request-filter]");
+    if (requestTab) {
+      requestFilter = requestTab.dataset.requestFilter;
+      requestTab.parentElement.querySelectorAll("button").forEach((button) => button.classList.remove("active"));
+      requestTab.classList.add("active");
+      renderConnectionRequests();
+      return;
+    }
+
+    const networkTab = event.target.closest("[data-network-filter]");
+    if (networkTab) {
+      networkFilter = networkTab.dataset.networkFilter;
+      document.querySelectorAll("[data-network-filter]").forEach((button) => button.classList.toggle("selected", button === networkTab));
+      renderNetworkLists();
+      return;
+    }
+
+    const profileTab = event.target.closest("[data-profile-tab]");
+    if (profileTab) {
+      const activeTab = profileTab.dataset.profileTab;
+      profileTab.parentElement.querySelectorAll("button").forEach((button) => button.classList.toggle("active", button === profileTab));
+      document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.profilePanel === activeTab);
+      });
+      return;
+    }
+
+    const cityMutual = event.target.closest("[data-city-mutual]");
+    if (cityMutual) {
+      renderCityMutuals(cityMutual.dataset.cityMutual);
+      showScreen("city-mutuals");
+      return;
+    }
+
+    const complete = event.target.closest("[data-complete-verification]");
+    if (complete) {
+      completeVerification();
+      return;
+    }
+
+    const instagramCard = event.target.closest("[data-instagram-profile]");
+    if (instagramCard) {
+      if (instagramCard.dataset.trustedInstagram !== "true") {
+        instagramCard.classList.add("locked-pulse");
+        window.setTimeout(() => instagramCard.classList.remove("locked-pulse"), 700);
+        return;
+      }
+      const username = instagramCard.dataset.instagramProfile;
+      window.location.href = `instagram://user?username=${username}`;
+      window.setTimeout(() => {
+        window.location.href = `https://www.instagram.com/${username}/`;
+      }, 650);
+      return;
+    }
+
+    const introSend = event.target.closest("[data-send-intro]");
+    if (introSend) {
+      markScreenClean("request-intro");
+      chatMode = "default";
+      chatFilter = "all";
+      introSend.textContent = "Request sent";
+      window.setTimeout(() => showScreen("chats"), 450);
+      return;
+    }
+
+    const requestPlan = event.target.closest("[data-request-plan]");
+    if (requestPlan) {
+      const message = document.querySelector("#planJoinMessage")?.value.trim();
+      if (message) requestPlan.dataset.requestMessage = message;
+      const textarea = document.querySelector("#planJoinMessage");
+      if (textarea) textarea.value = "";
+      selectedPlanStatus = "pending";
+      renderPlanDetail();
+      return;
+    }
+
+    const cancelPlanRequest = event.target.closest("[data-cancel-plan-request]");
+    if (cancelPlanRequest) {
+      selectedPlanStatus = "discoverable";
+      renderPlanDetail();
+      return;
+    }
+
+    const savePlan = event.target.closest("[data-save-plan]");
+    if (savePlan) {
+      markScreenClean("edit-plan");
+      savePlan.textContent = "Saved";
+      window.setTimeout(() => {
+        savePlan.textContent = "Save Changes";
+        selectedPlanStatus = "hosting";
+        showScreen("plan-detail", { replace: true });
+      }, 550);
+      return;
+    }
+
+    const cancelHostedPlan = event.target.closest("[data-cancel-hosted-plan]");
+    if (cancelHostedPlan) {
+      confirmCancelHostedPlan();
+      return;
+    }
+
+    const close = event.target.closest("[data-close-cluster]");
+    if (close) {
+      closeCluster();
+      return;
+    }
+
+    const clusterPerson = event.target.closest("[data-cluster-person]");
+    if (clusterPerson) {
+      renderClusterNetwork(clusterPerson.dataset.clusterPerson, clusterPerson.dataset.networkState);
+      return;
+    }
+
+    const uploadAction = event.target.closest(".upload-wide, .photo-tile");
+    if (uploadAction) {
+      uploadAction.classList.add("selected");
+      showUtilityFeedback("Photo action", "This opens the photo picker in the live app.");
+      return;
+    }
+
+    const quietDanger = event.target.closest(".quiet-danger");
+    if (quietDanger) {
+      quietDanger.textContent = "Removed";
+      quietDanger.disabled = true;
+      return;
+    }
+
+    const wideAction = event.target.closest(".wide-action");
+    if (wideAction) {
+      const previous = wideAction.textContent;
+      wideAction.textContent = previous.includes("QR") ? "Scanner ready" : previous.includes("Invite") ? "Invite copied" : "Contacts ready";
+      window.setTimeout(() => {
+        wideAction.textContent = previous;
+      }, 900);
+      return;
+    }
+
+    const photoUpload = event.target.closest(".photo-upload-button");
+    if (photoUpload) {
+      showPhotoSourceSheet();
+      return;
+    }
+
+    const safetyAction = event.target.closest(".action-grid button:not([data-next])");
+    if (safetyAction) {
+      const label = safetyAction.textContent.trim();
+      showUtilityFeedback(label, "This opens the relevant safety flow in the live beta.");
+      return;
+    }
+
+    const settingsAction = event.target.closest(".settings-section button:not([data-next])");
+    if (settingsAction) {
+      settingsAction.classList.toggle("active");
+      return;
+    }
+
+    const sendButton = event.target.closest(".composer button:not(.photo-upload-button), .chat-input button:not(.photo-upload-button)");
+    if (sendButton) {
+      const input = sendButton.parentElement?.querySelector("input, textarea");
+      if (input) input.value = "";
+      const previous = sendButton.textContent;
+      sendButton.textContent = "Sent";
+      window.setTimeout(() => {
+        sendButton.textContent = previous;
+      }, 750);
+      return;
+    }
+
+    const city = event.target.closest(".city-node");
+    if (city) {
+      const sky = document.querySelector(".city-sky");
+      const card = document.querySelector(".cluster-card");
+      sky.classList.add("expanded");
+      document.querySelectorAll(".city-node").forEach((node) => node.classList.remove("active"));
+      city.classList.add("active");
+      card.classList.add("open");
+      card.classList.remove("has-network");
+      document.querySelector("#personNetworkPanel")?.replaceChildren();
+      document.querySelectorAll("[data-cluster-person]").forEach((person) => person.classList.remove("focused"));
+      card.querySelector("p strong").textContent = `${city.dataset.city} trusted hub`;
+      return;
+    }
+
+    const sky = event.target.closest(".city-sky.expanded");
+    if (sky && !event.target.closest(".cluster-card, .map-bottom, .map-top, .bottom-nav")) {
+      closeCluster();
+      return;
+    }
+
+    const next = event.target.closest("[data-next]");
+    if (next) {
+      document.querySelector("#profileMenu")?.classList.remove("open");
+      const current = document.querySelector(".screen.active")?.dataset.screen;
+      if (next.dataset.profileName) selectedProfileName = next.dataset.profileName;
+      if (next.dataset.planName) selectedPlanName = next.dataset.planName;
+      if (next.dataset.planStatus) selectedPlanStatus = next.dataset.planStatus;
+      if (next.dataset.chatName) selectedChatName = next.dataset.chatName;
+      if (next.dataset.chatPath) selectedChatPath = next.dataset.chatPath;
+      if (next.dataset.chatPreview) selectedChatPreview = next.dataset.chatPreview;
+      if (next.dataset.next === "my-plans") planFilter = "hosting";
+      if (next.dataset.next === "trip") {
+        tripEditorMode = "create";
+        editingTripId = null;
+        tripReturnTarget = current === "home" ? "home" : "trusted";
+      }
+      if (next.dataset.next === "trusted") renderTrustedMode("onboarding");
+      if (next.dataset.next === "qr-reveal") renderQrRevealMode("home");
+      if (next.dataset.chatMode) {
+        chatMode = next.dataset.chatMode;
+        chatFilter = "all";
+        document.querySelectorAll("#chats [data-chat-filter]").forEach((button) => button.classList.toggle("active", button.dataset.chatFilter === "all"));
+      } else if (next.dataset.next === "chats") {
+        chatMode = "default";
+      }
+      if (next.dataset.next === "chat-detail") {
+        if (next.dataset.chatType === "intro_chat") {
+          activeChatDetailMode = "intro-group";
+          introThreadStarted = true;
+          introThreadLeft = next.dataset.chatRole !== "introducer";
+        } else if (next.dataset.chatType) {
+          activeChatDetailMode = next.dataset.chatType;
+        } else if (!introThreadStarted) {
+          activeChatDetailMode = "default";
+        }
+      }
+      showScreen(next.dataset.next);
+      return;
+    }
+
+    const publishPlan = event.target.closest("[data-publish-plan]");
+    if (publishPlan) {
+      planFilter = "hosting";
+      selectedPlanStatus = "hosting";
+      showScreen("my-plans");
+      return;
+    }
+
+    const selectable = event.target.closest(".selectable button");
+    if (selectable) {
+      const group = selectable.closest(".selectable");
+      const maxSelected = Number(group?.dataset.maxSelected || 0);
+      const selectedCount = group?.querySelectorAll("button.selected").length || 0;
+      if (!selectable.classList.contains("selected") && maxSelected && selectedCount >= maxSelected) {
+        selectable.blur();
+        return;
+      }
+      selectable.classList.toggle("selected");
+      selectable.blur();
+    }
+
+    const single = event.target.closest(".single-select .option-card");
+    if (single) {
+      single.parentElement.querySelectorAll(".option-card").forEach((option) => {
+        option.classList.remove("selected");
+        option.setAttribute("aria-pressed", "false");
+      });
+      single.classList.add("selected");
+      single.setAttribute("aria-pressed", "true");
+      if (single.dataset.verifyMethod) renderVerification(single.dataset.verifyMethod);
+      if (single.dataset.introMethod) renderIntroMethod(single.dataset.introMethod);
+    }
+
+    const toggle = event.target.closest(".exclusive-toggles .toggle-card");
+    if (toggle) {
+      toggle.parentElement.querySelectorAll(".toggle-card").forEach((card) => card.classList.remove("active"));
+      toggle.classList.add("active");
+    }
+
+    const privacyMode = event.target.closest("[data-privacy-mode]");
+    if (privacyMode) {
+      setPrivacyMode(privacyMode);
+      return;
+    }
+
+    const privacyExtra = event.target.closest("[data-privacy-extra]");
+    if (privacyExtra) {
+      privacyExtra.classList.toggle("active");
+      privacyExtra.setAttribute("aria-pressed", privacyExtra.classList.contains("active") ? "true" : "false");
+      return;
+    }
+
+    const setting = event.target.closest(".setting-card");
+    if (setting) setting.classList.toggle("active");
+  });
+
+}
+
+cleanBrandingImages();
+hydrateLists();
+setPrivacyMode();
+ensureBackButtons();
+document.querySelectorAll(".bottom-nav").forEach(renderNav);
+bindInteractions();
