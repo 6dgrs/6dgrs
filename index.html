@@ -327,10 +327,10 @@
             </div>
           </section>
           <div class="form-card">
-            <label>Title<input value="Coffee in Shoreditch" /></label>
-            <div class="form-grid two"><label>Date<input type="date" value="2026-06-06" /></label><label>Time<input type="time" value="14:30" /></label></div>
-            <label>Venue / location<input value="Shoreditch House cafe" /></label>
-            <label>Description<textarea>A small coffee plan for trusted mutuals nearby. Keep it warm, low-key, and easy to join.</textarea></label>
+            <label>Title<input placeholder="Coffee in Shoreditch" /></label>
+            <div class="form-grid two"><label>Date<input type="date" /></label><label>Time<input type="time" /></label></div>
+            <label>Venue / location<input placeholder="Shoreditch House cafe" /></label>
+            <label>Description<textarea placeholder="A small coffee plan for trusted mutuals nearby. Keep it warm, low-key, and easy to join."></textarea></label>
             <label>Max attendees<select><option selected>6 people</option><option>5 people</option><option>4 people</option><option>3 people</option></select></label>
             <label>Visibility<select><option selected>Mutual connections</option><option>Direct Trusted Friends only</option><option>2nd Degree connections</option><option>Invite link only</option></select></label>
             <label>Who can join<select><option selected>Mutual connections</option><option>Trusted Friends only</option><option>2nd Degree connections</option><option>Invite link only</option></select></label>
@@ -445,7 +445,7 @@
           <header class="page-header"><h1 id="introTitle">Request intro to Emma via Laura</h1><p class="path-line" id="introPathLine">Connected via Laura</p></header>
           <div class="select-group single-select intro-methods"><button class="option-card selected" aria-pressed="true" data-intro-method="mutual">Via Mutual Friend <em>Recommended</em></button><button class="option-card" aria-pressed="false" data-intro-method="direct">Direct Request</button></div>
           <div class="recipient-card" id="introRecipient"><span>Send Laura a note</span><strong>Laura Chen</strong></div>
-          <label class="message-box">Message<textarea id="introMessage">Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.</textarea></label>
+          <label class="message-box">Message<textarea id="introMessage" placeholder="Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time."></textarea></label>
           <p class="subtle-note" id="introMethodNote">This lands as a normal chat with Laura, not a formal approval request.</p>
         </div>
         <div class="sticky-cta"><button class="primary-button" data-send-intro>Send Request</button></div>
@@ -508,7 +508,7 @@
           </section>
           <div class="tabs profile-tabs"><button class="active" data-profile-tab="about">About</button><button data-profile-tab="trips">Trips</button><button data-profile-tab="plans">Plans</button><button data-profile-tab="trust">Trust</button></div>
           <section class="profile-tab-panel active" data-profile-panel="about">
-            <section class="content-section"><h2>About</h2><p class="about-copy">Warm-intro traveller based in London, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.</p><div class="profile-meta-grid"><span>Current city<strong>London</strong></span><span>Home city<strong>Lagos</strong></span><span>Trust ID<strong>6D-8492-LDN</strong></span></div></section>
+            <section class="content-section"><h2>About</h2><p class="about-copy">Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.</p><div class="profile-meta-grid"><span>Current city<strong>Tokyo</strong></span><span>Home city<strong>London</strong></span><span>Trust ID<strong>6D-8492-LDN</strong></span></div></section>
             <section class="content-section"><h2>Travel Personality</h2><div class="chip-cloud static"><span>Explorer</span><span>Foodie</span><span>Art & Culture</span><span>Hidden Gems</span></div><h2>Interests</h2><div class="chip-cloud static"><span>Design hotels</span><span>Jazz bars</span><span>Photography</span><span>Slow travel</span></div></section>
           </section>
           <section class="profile-tab-panel" data-profile-panel="trips">
@@ -561,13 +561,13 @@
           <header class="page-header"><p class="eyebrow">My Profile</p><h1>Edit Profile</h1><p>Keep your trusted travel signal clear and current.</p></header>
           <section class="content-section"><h2>Images</h2><div class="upload-main"><div class="avatar-preview">IO</div><div><strong>Profile photo</strong><span>Update your primary identity image</span></div></div><button class="upload-wide">Change cover image</button></section>
           <div class="form-card">
-            <label>Name<input value="Ifunanya Okafor" /></label>
-            <label>Username<input value="@ifunanya" /></label>
-            <label>Bio<textarea>Warm-intro traveller based in London, looking for thoughtful city rituals and trusted local plans.</textarea></label>
-            <label>Lately I’ve been drawn to<textarea>Quiet wine bars, sunrise walks and great design hotels.</textarea></label>
-            <label>The kind of plans I say yes to<textarea>Long lunches, gallery afternoons and low-key dinners.</textarea></label>
-            <label>My ideal local host knows<textarea>Where to go when nowhere obvious feels right.</textarea></label>
-            <div class="form-grid two"><label>Current City<input value="London" /></label><label>Home City<input value="Lagos" /></label></div>
+            <label>Name<input placeholder="Ifunanya Okafor" /></label>
+            <label>Username<input placeholder="@ifunanya" /></label>
+            <label>Bio<textarea placeholder="Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals and trusted local plans."></textarea></label>
+            <label>Lately I’ve been drawn to<textarea placeholder="Quiet wine bars, sunrise walks and great design hotels."></textarea></label>
+            <label>The kind of plans I say yes to<textarea placeholder="Long lunches, gallery afternoons and low-key dinners."></textarea></label>
+            <label>My ideal local host knows<textarea placeholder="Where to go when nowhere obvious feels right."></textarea></label>
+            <div class="form-grid two"><label>Current City<input placeholder="Tokyo" /></label><label>Home City<input placeholder="London" /></label></div>
             <label>Instagram connection<select><option>Connected · trusted only</option><option>Disconnect Instagram</option><option>Visible after accepted intro</option></select></label>
             <label>Profile visibility<select><option>Trusted connections only</option><option>Visible to mutuals</option><option>Public to network</option></select></label>
           </div>
@@ -579,11 +579,19 @@
       <section class="screen app-screen" id="settings" data-screen="settings">
         <div class="scroll-area app-scroll">
           <header class="network-header"><div><h1>Settings</h1><p>Account, privacy, safety, and app controls.</p></div><button class="small-pill" data-next="my-profile">Back</button></header>
-          <section class="settings-section"><h2>Account</h2><button>Phone number<span>+44 ••• ••• 2841</span></button><button>Email<span>ifunanya@example.com</span></button><button>Password & security<span>2FA enabled</span></button><button>Connected accounts<span>Instagram connected</span></button></section>
-          <section class="settings-section"><h2>Privacy</h2><button>Who can see current city<span>Trusted only</span></button><button>Who can see trips<span>Mutuals</span></button><button>Who can request intros<span>Trusted network</span></button><button>Who can view Instagram<span>Accepted connections</span></button><button>Profile visibility<span>Trusted connections only</span></button></section>
-          <section class="settings-section"><h2>Notifications</h2><button>Intro requests<span>On</span></button><button>Accepted requests<span>On</span></button><button>Trip overlaps<span>On</span></button><button>Trusted plans<span>On</span></button><button>Network unlocked<span>On</span></button><button>Chat messages<span>On</span></button></section>
-          <section class="settings-section"><h2>Safety</h2><button>Blocked users<span>2</span></button><button>Report history<span>Clear</span></button><button data-next="safety-centre">Meeting safety guidance<span>Open</span></button><button>Verification settings<span>QR + location</span></button></section>
-          <section class="settings-section"><h2>App</h2><button>Appearance<span>Light premium</span></button><button>Help centre<span>Open</span></button><button>Terms<span>Read</span></button><button>Privacy policy<span>Read</span></button><button class="danger-text">Delete account<span>Permanent</span></button></section>
+          <section class="settings-section"><h2>Account</h2><button data-settings-detail="phone">Phone number<span data-setting-value="phone">+44 ••• ••• 2841</span></button><button data-settings-detail="email">Email<span data-setting-value="email">ifunanya@example.com · verified</span></button><button data-settings-detail="security">Password & security<span data-setting-value="security">2FA enabled</span></button><button data-settings-detail="connected">Connected accounts<span data-setting-value="connected">Instagram connected</span></button></section>
+          <section class="settings-section"><h2>Privacy</h2><button data-privacy-setting="currentCity">Who can see current city<span data-setting-value="currentCity">Trusted connections only</span></button><button data-privacy-setting="trips">Who can see trips<span data-setting-value="trips">Mutuals</span></button><button data-privacy-setting="intros">Who can request intros<span data-setting-value="intros">Full trusted network</span></button><button data-privacy-setting="instagram">Who can view Instagram<span data-setting-value="instagram">Accepted connections</span></button><button data-privacy-setting="profile">Profile visibility<span data-setting-value="profile">Trusted connections only</span></button></section>
+          <section class="settings-section notification-settings"><h2>Notifications</h2><button data-notification-setting="introRequests" aria-pressed="true">Intro requests<span data-setting-value="introRequests">On</span><i aria-hidden="true"></i></button><button data-notification-setting="acceptedRequests" aria-pressed="true">Accepted requests<span data-setting-value="acceptedRequests">On</span><i aria-hidden="true"></i></button><button data-notification-setting="tripOverlaps" aria-pressed="true">Trip overlaps<span data-setting-value="tripOverlaps">On</span><i aria-hidden="true"></i></button><button data-notification-setting="trustedPlans" aria-pressed="true">Trusted plans<span data-setting-value="trustedPlans">On</span><i aria-hidden="true"></i></button><button data-notification-setting="networkUnlocked" aria-pressed="true">Network unlocked<span data-setting-value="networkUnlocked">On</span><i aria-hidden="true"></i></button><button data-notification-setting="chatMessages" aria-pressed="true">Chat messages<span data-setting-value="chatMessages">On</span><i aria-hidden="true"></i></button></section>
+          <section class="settings-section"><h2>Safety</h2><button data-settings-detail="blocked">Blocked users<span data-setting-value="blocked">2 blocked</span></button><button data-settings-detail="reports">Report history<span data-setting-value="reports">3 submitted</span></button><button data-next="safety-centre">Meeting safety guidance<span>Open</span></button><button data-settings-detail="verification">Verification settings<span data-setting-value="verification">QR + location</span></button></section>
+          <section class="settings-section"><h2>App</h2><button data-settings-detail="appearance">Appearance<span data-setting-value="appearance">Light</span></button><button data-settings-detail="help">Help centre<span>FAQ + support</span></button><button data-settings-detail="terms">Terms<span>Read</span></button><button data-settings-detail="privacyPolicy">Privacy policy<span>Read</span></button><button data-settings-detail="developer">Developer Mode<span>Internal testing</span></button><button class="danger-text" data-delete-account>Delete account<span>Requires confirmation</span></button></section>
+        </div>
+        <nav class="bottom-nav"></nav>
+      </section>
+
+      <section class="screen app-screen" id="settings-detail" data-screen="settings-detail">
+        <div class="scroll-area app-scroll">
+          <header class="network-header"><div><h1 id="settingsDetailTitle">Settings</h1><p id="settingsDetailCopy">Manage this setting.</p></div></header>
+          <div id="settingsDetailContent" class="settings-detail-content"></div>
         </div>
         <nav class="bottom-nav"></nav>
       </section>
@@ -591,16 +599,7 @@
       <section class="screen app-screen" id="notifications" data-screen="notifications">
         <div class="scroll-area app-scroll">
           <header class="network-header"><div><h1>Notifications</h1><p>Trust activity that needs your attention.</p></div><button class="small-pill" data-next="connection-requests">Requests</button></header>
-          <div class="notification-list">
-            <article class="notification-card"><span>Intro request received</span><strong>Noah asked Laura to introduce you.</strong><button data-next="connection-requests">Review</button></article>
-            <article class="notification-card"><span>Request accepted</span><strong>Emma accepted your Barcelona intro.</strong><button data-next="chats">Open chat</button></article>
-            <article class="notification-card"><span>Trusted plan</span><strong>Sofia requested to join Coffee in Shoreditch.</strong><button data-next="plan-requests">Review</button></article>
-            <article class="notification-card"><span>Pending plan request</span><strong>Your jazz night request is waiting for host approval.</strong><button data-next="trusted-plans">View plan</button></article>
-            <article class="notification-card"><span>Trip overlap found</span><strong>Three trusted mutuals are in Paris next week.</strong><button data-next="home">See people</button></article>
-            <article class="notification-card"><span>Trusted Friend confirmed</span><strong>Emma became a Trusted Friend after mutual verification.</strong><button data-next="unlocked">View unlock</button></article>
-            <article class="notification-card"><span>Meetup verified</span><strong>Your QR meetup with Theo was confirmed.</strong><button data-next="network-map">Explore</button></article>
-            <article class="notification-card"><span>New vouched connection</span><strong>Laura vouched for Amara in your London hub.</strong><button data-next="profile">View profile</button></article>
-          </div>
+          <div class="notification-list"></div>
         </div>
         <nav class="bottom-nav"></nav>
       </section>
@@ -673,7 +672,7 @@
           <section class="profile-head">
             <div class="profile-avatar">EL</div><div class="verified">Verified</div>
             <h1>Emma Laurent</h1><span class="trust-badge relationship-badge">Mutual via Laura</span><p>Currently in Oslo · Visible through Laura</p>
-            <div class="profile-actions"><button data-next="request-intro">Request Intro</button><button data-next="chats" data-chat-mode="share">Share Profile</button></div>
+            <div class="profile-actions"><button data-next="request-intro">Request Intro</button><button type="button" data-share-profile>Share Profile</button></div>
           </section>
           <section class="content-section"><h2>About</h2><p class="about-copy">Design-led traveler, weekend gallery wanderer, and believer in warm introductions over cold DMs.</p><div class="chip-cloud static"><span>Hidden Gems</span><span>Art & Culture</span><span>Coffee Spots</span><span>Luxury Travel</span></div></section>
           <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips"><div class="trip-row"><strong>Barcelona</strong><span>Jun 12-16 · open to meetups · same dates</span></div><div class="trip-row"><strong>Paris</strong><span>Jul 04-07 · trusted network only</span></div></div></section>

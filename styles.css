@@ -813,6 +813,13 @@ input, textarea, select {
   box-shadow: 0 10px 24px rgba(108, 99, 255, 0.08);
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: rgba(98, 104, 126, .72);
+  opacity: 1;
+  font-weight: 720;
+}
+
 textarea {
   min-height: 84px;
   resize: vertical;
@@ -3103,6 +3110,11 @@ textarea {
   width: auto;
 }
 
+#trustedPlansList .plan-card > button {
+  grid-column: 2;
+  justify-self: start;
+}
+
 .plan-card.past-plan-card button {
   color: var(--slate);
   background: rgba(238,234,254,.82);
@@ -3207,6 +3219,26 @@ textarea {
   box-shadow: none;
 }
 
+.request-card.request-accepted,
+.request-card.request-declined {
+  border-color: rgba(124,114,255,.2);
+}
+
+.request-card.request-accepted .trust-badge {
+  background: rgba(211, 249, 238, .92);
+  color: #108778;
+}
+
+.request-card.request-declined .trust-badge {
+  background: rgba(238,234,254,.82);
+  color: var(--slate);
+}
+
+.request-actions button:disabled {
+  opacity: .7;
+  cursor: default;
+}
+
 @media (max-width: 430px) {
   .my-plan-role-card .plan-card-actions,
   .plan-card .plan-card-actions {
@@ -3290,6 +3322,27 @@ textarea {
   gap: 10px;
 }
 
+@media (max-width: 430px) {
+  .date-row,
+  .form-grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .date-row input[type="date"],
+  .form-grid.two input[type="date"],
+  .form-grid.two input[type="time"] {
+    min-width: 0;
+    font-size: 13px;
+    padding-inline: 10px;
+    line-height: 1.1;
+  }
+
+  .date-row label,
+  .form-grid.two label {
+    min-width: 0;
+  }
+}
+
 .settings-list .setting-card > span:first-child {
   width: auto;
   height: auto;
@@ -3332,6 +3385,82 @@ textarea {
 .settings-section button.active {
   border-color: rgba(124,114,255,.30);
   background: rgba(238,234,254,.70);
+}
+
+.notification-settings button,
+.detail-actions button[data-detail-toggle] {
+  align-items: center;
+}
+
+.notification-settings button i,
+.detail-actions button[data-detail-toggle] i {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--periwinkle), var(--teal));
+  box-shadow: inset 0 0 0 1px rgba(124,114,255,.12);
+}
+
+.notification-settings button i::after,
+.detail-actions button[data-detail-toggle] i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 8px rgba(82,74,140,.16);
+  transition: transform .2s ease;
+}
+
+.notification-settings button.is-off i,
+.detail-actions button.is-off i {
+  background: #dfe5f2;
+}
+
+.notification-settings button.is-off i::after,
+.detail-actions button.is-off i::after {
+  transform: translateX(-18px);
+}
+
+.settings-detail-content {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 110px;
+}
+
+.settings-detail-content .form-card {
+  margin-top: 0;
+}
+
+.settings-status-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(211,249,238,.62);
+  color: var(--charcoal);
+}
+
+.settings-status-card span {
+  color: var(--slate);
+  font-size: 13px;
+}
+
+.settings-choice-group .option-card {
+  text-align: center;
+}
+
+.settings-selector-card {
+  max-width: 360px;
+}
+
+.settings-selector-card .select-group {
+  margin: 12px 0 16px;
 }
 
 .photo-tile.selected,

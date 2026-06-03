@@ -37,6 +37,8 @@ let selectedChatPreview = "Friday works. Laura vouched for you.";
 let pendingArchiveChatCard = null;
 let introThreadStarted = false;
 let introThreadLeft = false;
+let chatReturnTarget = "home";
+let activeSettingsDetail = "phone";
 const removedConnections = new Set();
 const screenHistory = [];
 const rootScreens = new Set(["welcome", "home", "network-list", "chats", "my-profile"]);
@@ -68,6 +70,7 @@ const backFallbacks = {
   unlocked: "network-list",
   "edit-profile": "my-profile",
   settings: "my-profile",
+  "settings-detail": "settings",
   notifications: "my-profile",
   "connection-requests": "my-profile",
   "safety-centre": "my-profile",
@@ -81,6 +84,57 @@ const trustedFriendState = {
   verifiedMeetups: 1,
   hostedPlans: 0,
   vouches: 1
+};
+
+const settingsState = {
+  privacy: {
+    currentCity: "Trusted connections only",
+    trips: "Mutuals",
+    intros: "Full trusted network",
+    instagram: "Accepted connections",
+    profile: "Trusted connections only"
+  },
+  notifications: {
+    introRequests: true,
+    acceptedRequests: true,
+    tripOverlaps: true,
+    trustedPlans: true,
+    networkUnlocked: true,
+    chatMessages: true
+  },
+  appearance: "Light",
+  connectedAccounts: {
+    instagram: true
+  },
+  blockedUsers: ["Mina Aoki", "Ren Sato"],
+  reportHistory: ["Profile concern · Emma Laurent", "Plan report · Jazz night", "Safety note · Mayfair"]
+};
+
+const appState = {
+  pendingIntroRequestActive: true,
+  introRequestDeclined: false,
+  introRequestAccepted: false,
+  notificationsRead: false,
+  generatedTrips: 0
+};
+
+const notificationItems = [
+  { id: "intro-noah", kind: "intro", title: "Intro request received", body: "Noah asked Laura to introduce you.", profile: "Noah Silva", active: true },
+  { id: "plan-sofia", kind: "plan", title: "Plan join request", body: "Sofia requested to join Coffee in Shoreditch.", profile: "Sofia Marin", active: true },
+  { id: "accepted-emma", kind: "open-chat", title: "Request accepted", body: "Emma accepted your Barcelona intro.", profile: "Emma Laurent", chatType: "direct_connection_chat", active: true },
+  { id: "pending-jazz", kind: "plan-view", title: "Pending plan request", body: "Your jazz night request is waiting for host approval.", active: true },
+  { id: "overlap-paris", kind: "home", title: "Trip overlap found", body: "Three trusted mutuals are in Paris next week.", active: true },
+  { id: "trusted-emma", kind: "unlock", title: "Trusted Friend confirmed", body: "Emma became a Trusted Friend after mutual verification.", active: true },
+  { id: "meetup-theo", kind: "network", title: "Meetup verified", body: "Your QR meetup with Theo was confirmed.", active: true },
+  { id: "vouched-amara", kind: "profile", title: "New vouched connection", body: "Laura vouched for Amara in your London hub.", profile: "Amara Okoye", active: true }
+];
+
+const privacyOptions = {
+  currentCity: { title: "Who can see current city", options: ["Nobody", "Trusted connections only", "Mutual connections", "Everyone allowed by trust rules"] },
+  trips: { title: "Who can see trips", options: ["Nobody", "Trusted only", "Mutuals", "Network visibility"] },
+  intros: { title: "Who can request intros", options: ["Nobody", "Trusted connections", "Mutual connections", "Full trusted network"] },
+  instagram: { title: "Who can view Instagram", options: ["Nobody", "Accepted connections", "Trusted connections", "Everyone allowed"] },
+  profile: { title: "Profile visibility", options: ["Hidden", "Trusted connections only", "Mutuals", "Discoverable"] }
 };
 
 const homeTrips = [
@@ -146,7 +200,7 @@ const thirdDegreePeople = [
 const chats = {
   all: [
     { name: "Intro Request", path: "Hugo → Emma via Laura", preview: "Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
-    { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both. Emma suggested a gallery afternoon.", time: "1m", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" },
+    { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "1m", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" },
     { name: "Emma Laurent", path: "You -> Laura -> Emma", preview: "Friday works. Laura vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
     { name: "Jonas Berg", path: "Hugo → Theo → Jonas", preview: "Theo introduced you both after the Oslo hub.", time: "6m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
     { name: "Mary Chen", path: "Hugo → Maya → Mary", preview: "Maya said you both like quiet dinner plans.", time: "11m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
@@ -491,7 +545,7 @@ function homeCardContext(person) {
 
 const myConnectionSignal = {
   tags: ["explorer", "food", "art", "gallery", "design", "coffee", "hidden gems", "slow travel", "architecture"],
-  bio: "Warm-intro traveller based in London, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.",
+  bio: "Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.",
   plans: ["coffee", "gallery", "jazz", "design"]
 };
 
@@ -933,6 +987,9 @@ function showScreen(id, options = {}) {
   if (id === "trusted-plans") renderTrustedPlans();
   if (id === "connection-requests") renderConnectionRequests();
   if (id === "plan-requests") renderPlanRequests();
+  if (id === "settings") syncSettingsRows();
+  if (id === "settings-detail") renderSettingsDetail();
+  if (id === "notifications") renderNotifications();
   if (id === "profile") renderProfile();
 }
 
@@ -1111,6 +1168,187 @@ function showUtilityFeedback(title, body, actionLabel = "Done") {
   document.body.append(dialog);
 }
 
+function syncSettingsRows() {
+  Object.entries(settingsState.privacy).forEach(([key, value]) => {
+    const target = document.querySelector(`[data-setting-value="${key}"]`);
+    if (target) target.textContent = value;
+  });
+  Object.entries(settingsState.notifications).forEach(([key, enabled]) => {
+    const row = document.querySelector(`[data-notification-setting="${key}"]`);
+    const value = document.querySelector(`[data-setting-value="${key}"]`);
+    if (value) value.textContent = enabled ? "On" : "Off";
+    if (row) {
+      row.classList.toggle("is-off", !enabled);
+      row.setAttribute("aria-pressed", String(enabled));
+    }
+  });
+  document.querySelector('[data-setting-value="appearance"]')?.replaceChildren(document.createTextNode(settingsState.appearance));
+  document.querySelector('[data-setting-value="connected"]')?.replaceChildren(document.createTextNode(settingsState.connectedAccounts.instagram ? "Instagram connected" : "No connected accounts"));
+  document.querySelector('[data-setting-value="blocked"]')?.replaceChildren(document.createTextNode(`${settingsState.blockedUsers.length} blocked`));
+  document.querySelector('[data-setting-value="reports"]')?.replaceChildren(document.createTextNode(`${settingsState.reportHistory.length} submitted`));
+}
+
+function profileForName(name = "") {
+  if (!name || name === "You" || name === "Hugo") return null;
+  if (personProfiles[name]) return personProfiles[name];
+  const first = name.split(" ")[0].toLowerCase();
+  return Object.values(personProfiles).find((profile) => profile.name.split(" ")[0].toLowerCase() === first) || null;
+}
+
+function openDirectChatWith(name = "Emma Laurent", options = {}) {
+  const profile = profileForName(name);
+  selectedChatName = profile?.name || name;
+  selectedChatPath = options.path || profile?.path || "Direct conversation";
+  selectedChatPreview = options.preview || `Message ${selectedChatName.split(" ")[0]}.`;
+  activeChatDetailMode = options.mode || (profile?.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat");
+  chatMode = "default";
+  showScreen("chat-detail");
+}
+
+function renderNotifications() {
+  const list = document.querySelector("#notifications .notification-list");
+  if (!list) return;
+  const activeItems = notificationItems.filter((item) => item.active);
+  list.innerHTML = activeItems.length ? activeItems.map((item) => {
+    let actions = "";
+    if (item.kind === "intro" || item.kind === "plan") {
+      actions = `<div class="notification-actions"><button type="button" data-notification-action="accept" data-notification-id="${item.id}">Accept</button><button type="button" data-notification-action="decline" data-notification-id="${item.id}">Decline</button><button type="button" data-notification-profile="${item.profile}">View Profile</button></div>`;
+    } else if (item.kind === "open-chat") {
+      actions = `<div class="notification-actions"><button type="button" data-notification-chat="${item.profile}" data-chat-type="${item.chatType || "direct_connection_chat"}">Open Chat</button><button type="button" data-notification-profile="${item.profile}">View Profile</button></div>`;
+    } else {
+      const targets = {
+        "plan-view": `<button data-next="trusted-plans">View Plan</button>`,
+        home: `<button data-next="home">See People</button>`,
+        unlock: `<button data-next="unlocked">View Unlock</button>`,
+        network: `<button data-next="network-map">Explore</button>`,
+        profile: `<button type="button" data-notification-profile="${item.profile}">View Profile</button>`
+      };
+      actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
+    }
+    return `<article class="notification-card" data-notification-card="${item.id}"><span>${item.title}</span><strong>${item.body}</strong>${actions}</article>`;
+  }).join("") : `<div class="empty-card">No active notifications.</div>`;
+}
+
+function renderSettingsDetail() {
+  const title = document.querySelector("#settingsDetailTitle");
+  const copy = document.querySelector("#settingsDetailCopy");
+  const content = document.querySelector("#settingsDetailContent");
+  if (!title || !copy || !content) return;
+  const detail = activeSettingsDetail;
+  const pages = {
+    phone: {
+      title: "Phone Number",
+      copy: "View, update, or verify your phone number.",
+      body: `<section class="form-card"><label>Current number<input placeholder="+44 ••• ••• 2841" /></label><label>New phone number<input type="tel" placeholder="Enter phone number" /></label><button type="button" data-settings-feedback="Verification code sent">Send verification code</button><button type="button" data-settings-feedback="Phone number saved">Save phone number</button></section>`
+    },
+    email: {
+      title: "Email",
+      copy: "Update your email address and review verification status.",
+      body: `<section class="form-card"><label>Email address<input type="email" placeholder="ifunanya@example.com" /></label><div class="settings-status-card"><strong>Verified</strong><span>Your email is verified for account recovery.</span></div><button type="button" data-settings-feedback="Email update saved">Save email</button><button type="button" data-settings-feedback="Verification email sent">Resend verification</button></section>`
+    },
+    security: {
+      title: "Password & Security",
+      copy: "Change password, manage 2FA, and review active sessions.",
+      body: `<section class="settings-section detail-actions"><button type="button" data-settings-feedback="Password reset email sent">Change password<span>Send secure reset link</span></button><button type="button" data-detail-toggle="2FA" aria-pressed="true">Two-factor authentication<span>On</span><i aria-hidden="true"></i></button><button type="button" data-settings-feedback="Sessions reviewed">Active sessions<span>2 devices</span></button></section>`
+    },
+    connected: {
+      title: "Connected Accounts",
+      copy: "Manage Instagram and future trust-building integrations.",
+      body: `<section class="settings-section detail-actions"><button type="button" data-instagram-toggle>Instagram<span>${settingsState.connectedAccounts.instagram ? "Connected" : "Not connected"}</span></button><button type="button" data-settings-feedback="More connected accounts are coming soon">Additional platforms<span>Coming soon</span></button></section>`
+    },
+    blocked: {
+      title: "Blocked Users",
+      copy: "View and manage people removed from your visible trusted graph.",
+      body: `<section class="settings-section detail-actions">${settingsState.blockedUsers.map((name) => `<button type="button" data-unblock-user="${name}">${name}<span>Unblock</span></button>`).join("") || `<div class="empty-card">No blocked users.</div>`}</section>`
+    },
+    reports: {
+      title: "Report History",
+      copy: "Review submitted reports and keep a record of safety actions.",
+      body: `<section class="settings-section detail-actions">${settingsState.reportHistory.map((item) => `<button type="button" data-settings-feedback="Report opened">${item}<span>View</span></button>`).join("")}<button type="button" class="muted-plan-action" data-clear-report-history>Clear report history<span>Local history only</span></button></section>`
+    },
+    verification: {
+      title: "Verification Settings",
+      copy: "Manage QR, location, and future identity verification options.",
+      body: `<section class="settings-section detail-actions"><button type="button" data-detail-toggle="QR verification" aria-pressed="true">QR verification<span>On</span><i aria-hidden="true"></i></button><button type="button" data-detail-toggle="Location verification" aria-pressed="true">Location verification<span>On</span><i aria-hidden="true"></i></button><button type="button" data-settings-feedback="Identity verification will be available in beta">Identity verification<span>Coming soon</span></button></section>`
+    },
+    appearance: {
+      title: "Appearance",
+      copy: "Choose how the app should look on this device.",
+      body: `<section class="select-group single-select settings-choice-group">${["Light", "Dark", "System default"].map((mode) => `<button class="option-card ${settingsState.appearance === mode ? "selected" : ""}" type="button" data-appearance-choice="${mode}" aria-pressed="${settingsState.appearance === mode}">${mode}</button>`).join("")}</section>`
+    },
+    help: {
+      title: "Help Centre",
+      copy: "Find answers, contact support, and review community guidance.",
+      body: `<section class="settings-section detail-actions"><button type="button" data-settings-feedback="What is 6dgrs opened">What is 6dgrs<span>Trusted routes through real people</span></button><button type="button" data-settings-feedback="Trusted introductions opened">Trusted Introductions<span>How warm intros work</span></button><button type="button" data-settings-feedback="Trusted Plans opened">Trusted Plans<span>Small hosted meetups</span></button><button type="button" data-settings-feedback="Trips opened">Trips<span>Travel visibility and overlaps</span></button><button type="button" data-settings-feedback="Messaging opened">Messaging<span>Intro, direct and plan chats</span></button><button type="button" data-settings-feedback="Privacy opened">Privacy<span>Control who sees what</span></button><button type="button" data-settings-feedback="Safety opened">Safety<span>Meet with trust</span></button><button type="button" data-settings-feedback="Reporting opened">Reporting<span>Report or block concerns</span></button><button type="button" data-settings-feedback="Verification opened">Verification<span>QR, location and identity</span></button><button type="button" data-settings-feedback="Support request started">Contact Support<span>Message the 6dgrs team</span></button></section>`
+    },
+    terms: {
+      title: "Terms of Service",
+      copy: "Review the current beta terms.",
+      body: `<section class="safety-card legal-copy"><h2>Terms of Service</h2><p>6dgrs is a trusted-introduction and small-plans beta. You are responsible for keeping account details accurate, using introductions respectfully, and meeting people safely.</p><p>Community standards prohibit harassment, impersonation, pressure, spam, unsafe plans, and misuse of another person's trust path.</p><p>Introductions and plans are social tools, not guarantees. Hosts choose who joins a plan, and 6dgrs may limit, suspend, or remove accounts that undermine safety or trust.</p><p>User content, including messages, trip details, photos, and profile information, must be yours to share and may be moderated where safety requires it.</p><p>6dgrs is not liable for offline behaviour between users, but reports, blocks, and verification tools help preserve a safer trusted network.</p></section>`
+    },
+    privacyPolicy: {
+      title: "Privacy Policy",
+      copy: "Review how 6dgrs handles account, trip, plan, and trust data.",
+      body: `<section class="safety-card legal-copy"><h2>Privacy Policy</h2><p>6dgrs uses email and phone number for account access, safety, recovery, and verification. Instagram connection is optional and used as a trust signal when you choose to connect it.</p><p>Trip, city, plan, and network information power trusted introductions, overlap matching, city hubs, and privacy-aware discovery.</p><p>Location information is only used where you enable city, trip, or meetup verification features. Network paths may be archived to preserve history without keeping active access open.</p><p>Data retention keeps past chats, plans, reports, and meetup records where they support safety and relationship history. You can request account deletion, access, correction, or visibility changes from settings.</p></section>`
+    },
+    developer: {
+      title: "Developer Mode",
+      copy: "Internal testing tools. This will be removed before launch.",
+      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
+    }
+  };
+  const page = pages[detail] || pages.phone;
+  title.textContent = page.title;
+  copy.textContent = page.copy;
+  content.innerHTML = page.body;
+}
+
+function openPrivacySelector(key) {
+  const setting = privacyOptions[key];
+  if (!setting) return;
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card settings-selector-card" role="dialog" aria-modal="true" aria-label="${setting.title}">
+      <h2>${setting.title}</h2>
+      <div class="select-group single-select">
+        ${setting.options.map((option) => `<button type="button" class="option-card ${settingsState.privacy[key] === option ? "selected" : ""}" data-privacy-option="${key}" data-privacy-value="${option}" aria-pressed="${settingsState.privacy[key] === option}">${option}</button>`).join("")}
+      </div>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-save-privacy-setting="${key}">Save</button></div>
+    </div>
+  `;
+  document.body.append(dialog);
+}
+
+function confirmDeleteAccountStepOne() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete account">
+      <strong>Delete your account?</strong>
+      <p>This action cannot be undone.</p>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-delete-account-final-step>Continue</button></div>
+    </div>
+  `;
+  document.body.append(dialog);
+}
+
+function confirmDeleteAccountFinal() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Final delete account confirmation">
+      <strong>Final confirmation</strong>
+      <p>Deleting removes your account from this prototype flow. Past trust history would require backend handling in production.</p>
+      <div><button type="button" data-dialog-close>Keep Account</button><button type="button" data-confirm-delete-account>Delete Account</button></div>
+    </div>
+  `;
+  document.body.append(dialog);
+}
+
 function navigateBackFrom(current) {
   markScreenClean(current);
   const target = current === "unlocked" ? fallbackForScreen(current) : screenHistory.pop() || fallbackForScreen(current);
@@ -1119,6 +1357,12 @@ function navigateBackFrom(current) {
 
 function goBack() {
   const current = activeScreenId();
+  if (current === "chats" && chatMode !== "default") {
+    const target = chatReturnTarget || screenHistory.pop() || "home";
+    chatMode = "default";
+    showScreen(target, { replace: true });
+    return;
+  }
   if (rootScreens.has(current)) return;
   if (hasUnsavedChanges(current)) {
     confirmDiscardChanges(() => navigateBackFrom(current));
@@ -1332,7 +1576,7 @@ function renderProfile() {
     <section class="profile-head">
       <div class="profile-avatar">${profile.initials}</div><div class="verified">Verified</div>
       <h1>${profile.name}</h1><span class="trust-badge relationship-badge">${connectionState.relationship}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
-      <div class="profile-actions">${primaryAction}<button data-next="chats" data-chat-mode="share">Share Profile</button></div>
+      <div class="profile-actions">${primaryAction}<button type="button" data-share-profile>Share Profile</button></div>
     </section>
     <section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${profile.interests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>
     <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips">${upcomingTrips.length ? upcomingTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("") : `<div class="trip-row muted"><strong>No visible trips</strong><span>Nothing visible right now</span></div>`}</div></section>
@@ -1378,7 +1622,7 @@ function renderNav(nav) {
     (current === "network-map" && item.screen === "network-list") ||
     (current === "city-mutuals" && item.screen === "home") ||
     (["trusted-plans", "nearby-people", "suggested-connections", "create-plan", "plan-detail", "plan-chat", "notifications", "connection-requests"].includes(current) && item.screen === "home") ||
-    (["my-profile", "all-trips", "my-plans", "edit-plan", "plan-requests", "person-trips", "person-plans", "edit-profile", "settings", "safety-centre", "how-works", "profile"].includes(current) && item.screen === "my-profile")
+    (["my-profile", "all-trips", "my-plans", "edit-plan", "plan-requests", "person-trips", "person-plans", "edit-profile", "settings", "settings-detail", "safety-centre", "how-works", "profile"].includes(current) && item.screen === "my-profile")
   );
   nav.innerHTML = bottomNavTargets.map((item) => (
     `<button class="${isActive(item) ? "active" : ""}" data-next="${item.screen}">${item.label}</button>`
@@ -1452,12 +1696,12 @@ function chatCard(chat, index, mode = "default") {
   ` : "";
   const context = isPlanChat
     ? "Hosted by Amara · 4 attendees · Accepted"
-    : chat.introRequest
+    : chat.introRequest || chatType === "Intro Chat"
       ? ""
     : chat.path.includes("Trusted Friend")
       ? "Trusted circle conversation."
       : hasPathRoute
-        ? "Visible through a mutual introduction path."
+        ? (chatType === "Intro Chat" ? "" : "Visible through a mutual introduction path.")
         : chat.preview;
   return `
     <article class="chat-card ${mode === "share" ? "share-mode" : ""} ${chat.introRequest ? "intro-request-card" : ""}" ${mode === "share" ? "" : `data-next="${destination}"${planAttrs}${detailAttrs}`} data-chat-name="${chat.name}">
@@ -1492,7 +1736,7 @@ function planShareComposer() {
       </article>
       <div class="share-send-box">
         <label>Send to<select><option>Laura Chen</option><option>Theo Jensen</option><option>Amara Okoye</option></select></label>
-        <label>Message<textarea placeholder="Add a short note">Thought you might like this trusted plan.</textarea></label>
+        <label>Message<textarea placeholder="Thought you might like this trusted plan."></textarea></label>
         <button class="primary-button" type="button">Send Plan</button>
       </div>
     </section>
@@ -1603,8 +1847,14 @@ function renderEditPlan() {
     hub.querySelector("strong").textContent = plan.name;
     hub.querySelector("span").textContent = `${plan.time} · ${plan.location}`;
   }
-  if (titleInput) titleInput.value = plan.name;
-  if (locationInput) locationInput.value = plan.location;
+  if (titleInput) {
+    titleInput.value = "";
+    titleInput.placeholder = plan.name;
+  }
+  if (locationInput) {
+    locationInput.value = "";
+    locationInput.placeholder = plan.location;
+  }
   if (chatButton) {
     chatButton.dataset.planName = plan.name;
     chatButton.dataset.planStatus = "hosting";
@@ -1841,10 +2091,22 @@ function tripsSections(trips, options = {}) {
   `;
 }
 
-function requestCard(request, index = 0) {
-  const actions = request.actions
-    ? `<div class="request-actions"><button>Accept</button><button>Decline</button><button data-next="profile">View Profile</button></div>`
-    : `<div class="request-actions"><button data-next="profile">View Profile</button></div>`;
+function requestCard(request, index = 0, group = requestFilter) {
+  const status = (request.status || "").toLowerCase();
+  const isNew = request.actions || status.includes("new") || status.includes("waiting for you");
+  const isAccepted = status.includes("accepted") || status.includes("chat open") || status.includes("added");
+  const isDeclined = status.includes("declined");
+  const isWaiting = !isNew && !isAccepted && !isDeclined && (status.includes("waiting") || status.includes("sent") || status.includes("pending"));
+  const profileAttr = `data-profile-name="${request.name}"`;
+  const actions = isNew
+    ? `<div class="request-actions"><button type="button" data-request-response="accept" data-request-group="${group}" data-request-index="${index}">Accept</button><button type="button" data-request-response="decline" data-request-group="${group}" data-request-index="${index}">Decline</button><button data-next="profile" ${profileAttr}>View Profile</button></div>`
+    : isAccepted
+      ? `<div class="request-actions"><button type="button" data-message-person="${request.name}">Message</button><button data-next="profile" ${profileAttr}>View Profile</button></div>`
+      : isDeclined
+        ? `<div class="request-actions"><button data-next="profile" ${profileAttr}>View Profile</button></div>`
+        : isWaiting
+          ? `<div class="request-actions status-only"><span>Status only · ${request.status}</span></div>`
+          : `<div class="request-actions"><button data-next="profile" ${profileAttr}>View Profile</button></div>`;
   const requestContext = request.type.includes("Intro")
     ? "Visible through a mutual path - decide whether to continue the introduction."
     : request.type.includes("Trusted Friend")
@@ -1869,7 +2131,7 @@ function requestCard(request, index = 0) {
 function renderConnectionRequests() {
   const list = document.querySelector("#connectionRequestList");
   if (!list) return;
-  list.innerHTML = connectionRequests[requestFilter].map(requestCard).join("");
+  list.innerHTML = (connectionRequests[requestFilter] || []).map((request, index) => requestCard(request, index, requestFilter)).join("");
 }
 
 function renderPlanRequests() {
@@ -1884,7 +2146,7 @@ function renderPlanRequests() {
         <span class="trust-badge">${request.vouch}</span>
         <p>${request.message}</p>
       </div>
-      <div class="request-actions"><button data-next="plan-chat">Accept</button><button>Reject</button></div>
+      <div class="request-actions"><button type="button" data-plan-request-response="accept" data-plan-request-index="${index}">Accept</button><button type="button" data-plan-request-response="reject" data-plan-request-index="${index}">Reject</button><button data-next="profile" data-profile-name="${request.name}">View Profile</button></div>
     </article>
   `).join("");
 }
@@ -2064,7 +2326,9 @@ function renderChats() {
   const headerCopy = document.querySelector("#chatContextCopy");
   const headerTitle = document.querySelector("#chats .compact-header h1");
   const tabs = document.querySelector("#chats .chat-tabs");
-  const source = chatMode === "share" ? shareContacts : chats[chatFilter];
+  const source = chatMode === "share"
+    ? shareContacts
+    : (chats[chatFilter] || []).filter((chat) => !chat.introRequest || appState.pendingIntroRequestActive);
   if (headerTitle) headerTitle.textContent = chatMode === "plan-share" ? "Share Plan" : "Chats";
   if (tabs) tabs.hidden = chatMode === "plan-share";
   if (headerCopy) {
@@ -2108,7 +2372,22 @@ function renderChatDetail() {
           <button class="text-mini" type="button" data-intro-soft-decline>Not right now</button>
         </div>
       </div>
-      <div class="composer"><input placeholder="Reply to Hugo" value="Happy to intro - what are you hoping to connect on?" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+      <div class="composer"><input placeholder="Happy to intro - what are you hoping to connect on?" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+    `;
+    return;
+  }
+
+  if (activeChatDetailMode === "intro-reply") {
+    screen.innerHTML = `
+      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>Hugo</strong><span>Intro request clarification</span></div></header>
+      <div class="direct-chat-actions compact-chat-actions intro-request-compact-actions">
+        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
+      </div>
+      <div class="messages">
+        <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right.</p>
+        <p class="bubble mine">Happy to intro - what are you hoping to connect on?</p>
+      </div>
+      <div class="composer"><input placeholder="Message Hugo" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
     `;
     return;
   }
@@ -2178,7 +2457,7 @@ function confirmIntroduce() {
     <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Introduce Hugo and Emma">
       <h2>Introduce Hugo and Emma?</h2>
       <p>You can edit the note before opening the shared intro chat.</p>
-      <textarea id="introComposeMessage">Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel.</textarea>
+      <textarea id="introComposeMessage" placeholder="Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel."></textarea>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-send-intro-message>Send Intro</button></div>
     </div>
   `;
@@ -2193,7 +2472,7 @@ function confirmIntroSoftDecline() {
     <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Not right now">
       <h2>Not right now?</h2>
       <p>Keep it soft. You can send a note or close this without replying.</p>
-      <textarea>Not right now, but happy to reconnect another time.</textarea>
+      <textarea placeholder="Not right now, but happy to reconnect another time."></textarea>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-dialog-close>Send note</button></div>
     </div>
   `;
@@ -2373,12 +2652,18 @@ function renderIntroMethod(method = "mutual") {
   if (method === "mutual") {
     if (recipient) recipient.innerHTML = `<span>Send ${mutualName} a note</span><strong>${mutualName}</strong>`;
     if (note) note.textContent = `This lands as a normal chat with ${mutualName}, not a formal approval request.`;
-    if (message && !message.value.trim()) message.value = `Hey ${mutualName} - would love an intro to ${firstName} if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.`;
+    if (message) {
+      message.value = "";
+      message.placeholder = `Hey ${mutualName} - would love an intro to ${firstName} if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.`;
+    }
     if (cta) cta.textContent = "Send Request";
   } else {
     if (recipient) recipient.innerHTML = `<span>Sending to</span><strong>${profile.name}</strong>`;
     if (note) note.textContent = `This goes directly to ${firstName}. Your profile stays partially hidden until ${firstName} accepts.`;
-    if (message) message.value = `Hey ${firstName} - ${mutualName} is our mutual connection. I would love to connect if it feels right.`;
+    if (message) {
+      message.value = "";
+      message.placeholder = `Hey ${firstName} - ${mutualName} is our mutual connection. I would love to connect if it feels right.`;
+    }
     if (cta) cta.textContent = `Send to ${firstName}`;
   }
 }
@@ -2444,6 +2729,7 @@ function hydrateLists() {
   renderTrustedPlans();
   renderConnectionRequests();
   renderPlanRequests();
+  syncSettingsRows();
 }
 
 function closeCluster() {
@@ -2500,6 +2786,19 @@ function bindInteractions() {
     if (screen && dirtyScreens.has(screen.dataset.screen) && !event.target.closest("#homeSearch")) {
       screen.dataset.dirty = "true";
     }
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const field = event.target.closest("input[placeholder], textarea[placeholder]");
+    if (!field) return;
+    if (!field.dataset.placeholderText) field.dataset.placeholderText = field.placeholder;
+    field.placeholder = "";
+  });
+
+  document.addEventListener("focusout", (event) => {
+    const field = event.target.closest("input, textarea");
+    if (!field?.dataset.placeholderText || field.value.trim()) return;
+    field.placeholder = field.dataset.placeholderText;
   });
 
   document.addEventListener("pointerdown", (event) => {
@@ -2628,6 +2927,16 @@ function bindInteractions() {
       return;
     }
 
+    const shareProfile = event.target.closest("[data-share-profile]");
+    if (shareProfile) {
+      chatReturnTarget = activeScreenId();
+      chatMode = "share";
+      chatFilter = "all";
+      document.querySelectorAll("#chats [data-chat-filter]").forEach((button) => button.classList.toggle("active", button.dataset.chatFilter === "all"));
+      showScreen("chats");
+      return;
+    }
+
     const chatMute = event.target.closest("[data-chat-mute]");
     if (chatMute) {
       const card = chatMute.closest(".chat-card");
@@ -2666,6 +2975,34 @@ function bindInteractions() {
     const introSoftDecline = event.target.closest("[data-intro-soft-decline]");
     if (introSoftDecline) {
       confirmIntroSoftDecline();
+      return;
+    }
+
+    const connectionResponse = event.target.closest("[data-request-response]");
+    if (connectionResponse) {
+      const card = connectionResponse.closest(".request-card");
+      const accepted = connectionResponse.dataset.requestResponse === "accept";
+      card?.classList.add(accepted ? "request-accepted" : "request-declined");
+      card?.querySelectorAll(".request-actions button").forEach((button) => {
+        if (button !== connectionResponse) button.disabled = true;
+      });
+      connectionResponse.textContent = accepted ? "Accepted" : "Declined";
+      connectionResponse.disabled = true;
+      showUtilityFeedback(accepted ? "Request accepted" : "Request declined", accepted ? "The connection request has been accepted." : "The request has been declined.");
+      return;
+    }
+
+    const planRequestResponse = event.target.closest("[data-plan-request-response]");
+    if (planRequestResponse) {
+      const card = planRequestResponse.closest(".request-card");
+      const accepted = planRequestResponse.dataset.planRequestResponse === "accept";
+      card?.classList.add(accepted ? "request-accepted" : "request-declined");
+      card?.querySelectorAll(".request-actions button").forEach((button) => {
+        if (button !== planRequestResponse) button.disabled = true;
+      });
+      planRequestResponse.textContent = accepted ? "Accepted" : "Rejected";
+      planRequestResponse.disabled = true;
+      showUtilityFeedback(accepted ? "Request accepted" : "Request rejected", accepted ? "They can now enter the plan chat." : "The join request has been rejected.");
       return;
     }
 
@@ -2881,9 +3218,115 @@ function bindInteractions() {
       return;
     }
 
-    const settingsAction = event.target.closest(".settings-section button:not([data-next])");
-    if (settingsAction) {
-      settingsAction.classList.toggle("active");
+    const settingsDetail = event.target.closest("[data-settings-detail]");
+    if (settingsDetail) {
+      activeSettingsDetail = settingsDetail.dataset.settingsDetail;
+      showScreen("settings-detail");
+      return;
+    }
+
+    const privacySetting = event.target.closest("[data-privacy-setting]");
+    if (privacySetting) {
+      openPrivacySelector(privacySetting.dataset.privacySetting);
+      return;
+    }
+
+    const privacyOption = event.target.closest("[data-privacy-option]");
+    if (privacyOption) {
+      privacyOption.closest(".settings-selector-card")?.querySelectorAll("[data-privacy-option]").forEach((button) => {
+        button.classList.toggle("selected", button === privacyOption);
+        button.setAttribute("aria-pressed", String(button === privacyOption));
+      });
+      return;
+    }
+
+    const savePrivacy = event.target.closest("[data-save-privacy-setting]");
+    if (savePrivacy) {
+      const key = savePrivacy.dataset.savePrivacySetting;
+      const selected = document.querySelector(`[data-privacy-option="${key}"].selected`);
+      if (selected) settingsState.privacy[key] = selected.dataset.privacyValue;
+      document.querySelector(".discard-dialog")?.remove();
+      syncSettingsRows();
+      showUtilityFeedback("Privacy updated", `${privacyOptions[key]?.title || "Setting"} is now ${settingsState.privacy[key]}.`);
+      return;
+    }
+
+    const notificationSetting = event.target.closest("[data-notification-setting]");
+    if (notificationSetting) {
+      const key = notificationSetting.dataset.notificationSetting;
+      settingsState.notifications[key] = !settingsState.notifications[key];
+      syncSettingsRows();
+      return;
+    }
+
+    const detailToggle = event.target.closest("[data-detail-toggle]");
+    if (detailToggle) {
+      const enabled = detailToggle.getAttribute("aria-pressed") !== "true";
+      detailToggle.setAttribute("aria-pressed", String(enabled));
+      detailToggle.classList.toggle("is-off", !enabled);
+      const value = detailToggle.querySelector("span");
+      if (value) value.textContent = enabled ? "On" : "Off";
+      return;
+    }
+
+    const instagramToggle = event.target.closest("[data-instagram-toggle]");
+    if (instagramToggle) {
+      settingsState.connectedAccounts.instagram = !settingsState.connectedAccounts.instagram;
+      renderSettingsDetail();
+      syncSettingsRows();
+      showUtilityFeedback(settingsState.connectedAccounts.instagram ? "Instagram connected" : "Instagram disconnected", settingsState.connectedAccounts.instagram ? "Instagram is available for trusted profile context." : "Instagram is no longer connected.");
+      return;
+    }
+
+    const unblockUser = event.target.closest("[data-unblock-user]");
+    if (unblockUser) {
+      settingsState.blockedUsers = settingsState.blockedUsers.filter((name) => name !== unblockUser.dataset.unblockUser);
+      renderSettingsDetail();
+      syncSettingsRows();
+      showUtilityFeedback("User unblocked", `${unblockUser.dataset.unblockUser} is no longer blocked.`);
+      return;
+    }
+
+    const clearReportHistory = event.target.closest("[data-clear-report-history]");
+    if (clearReportHistory) {
+      settingsState.reportHistory = [];
+      renderSettingsDetail();
+      syncSettingsRows();
+      showUtilityFeedback("Report history cleared", "Local report history has been cleared in this prototype.");
+      return;
+    }
+
+    const appearanceChoice = event.target.closest("[data-appearance-choice]");
+    if (appearanceChoice) {
+      settingsState.appearance = appearanceChoice.dataset.appearanceChoice;
+      renderSettingsDetail();
+      syncSettingsRows();
+      showUtilityFeedback("Appearance updated", `${settingsState.appearance} appearance selected.`);
+      return;
+    }
+
+    const settingsFeedback = event.target.closest("[data-settings-feedback]");
+    if (settingsFeedback) {
+      showUtilityFeedback(settingsFeedback.dataset.settingsFeedback, "This action is wired in the prototype and will connect to backend services in beta.");
+      return;
+    }
+
+    const deleteAccount = event.target.closest("[data-delete-account]");
+    if (deleteAccount) {
+      confirmDeleteAccountStepOne();
+      return;
+    }
+
+    const deleteAccountFinalStep = event.target.closest("[data-delete-account-final-step]");
+    if (deleteAccountFinalStep) {
+      confirmDeleteAccountFinal();
+      return;
+    }
+
+    const confirmDeleteAccount = event.target.closest("[data-confirm-delete-account]");
+    if (confirmDeleteAccount) {
+      document.querySelector(".discard-dialog")?.remove();
+      showUtilityFeedback("Account deletion queued", "In the live beta, this would start permanent account deletion after backend confirmation.");
       return;
     }
 
@@ -2940,6 +3383,7 @@ function bindInteractions() {
       if (next.dataset.next === "qr-reveal") renderQrRevealMode("home");
       if (next.dataset.chatMode) {
         chatMode = next.dataset.chatMode;
+        chatReturnTarget = current || "home";
         chatFilter = "all";
         document.querySelectorAll("#chats [data-chat-filter]").forEach((button) => button.classList.toggle("active", button.dataset.chatFilter === "all"));
       } else if (next.dataset.next === "chats") {
