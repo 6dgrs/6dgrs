@@ -186,6 +186,27 @@ button {
   background: linear-gradient(135deg, var(--periwinkle), var(--teal));
 }
 
+.discard-card .modal-input,
+.discard-card textarea {
+  width: 100%;
+  min-height: 48px;
+  margin: 0 0 12px;
+  border: 1px solid rgba(124,114,255,.18);
+  border-radius: 18px;
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(255,255,255,.9);
+}
+
+.discard-card .modal-error {
+  display: block;
+  min-height: 18px;
+  margin: -4px 0 12px;
+  color: #b6485f;
+  font-weight: 800;
+}
+
 @keyframes floatIn {
   from { opacity: 0; transform: translateY(10px) scale(.99); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1274,6 +1295,7 @@ textarea {
 }
 
 .icon-button {
+  position: relative;
   width: 45px;
   height: 45px;
   display: inline-grid;
@@ -1357,6 +1379,22 @@ textarea {
   overflow: visible;
 }
 
+#chats .chat-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#chats .chat-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+#chats .chat-tabs button {
+  flex: 0 0 118px;
+}
+
 .chat-tabs button, .request-tabs button, .profile-tabs button {
   min-width: 0;
   padding: 11px 6px;
@@ -1373,6 +1411,14 @@ textarea {
   line-height: 1.08;
   word-break: normal;
   overflow-wrap: normal;
+}
+
+#connection-requests .request-tabs {
+  margin-top: 14px;
+}
+
+#connectionRequestList {
+  margin-top: 16px;
 }
 
 .plan-tabs {
@@ -1417,6 +1463,31 @@ textarea {
   border: 1px solid rgba(124,114,255,.12);
   color: var(--slate);
   box-shadow: 0 14px 36px rgba(93, 90, 155, .10);
+}
+
+.polished-empty-state {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  min-height: 112px;
+}
+
+.polished-empty-state strong {
+  color: var(--charcoal);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.polished-empty-state p {
+  margin: 0;
+  color: var(--slate);
+  line-height: 1.35;
+}
+
+.polished-empty-state .soft-action {
+  width: max-content;
+  min-width: 132px;
+  margin-top: 4px;
 }
 
 .person-card, .chat-card {
@@ -1523,11 +1594,16 @@ textarea {
   white-space: nowrap;
 }
 
-.person-card.locked-relation {
+.person-card.locked-relation,
+.plan-card.locked-relation {
   opacity: .72;
 }
 
 .person-card.locked-relation .avatar {
+  filter: blur(1px) grayscale(.35);
+}
+
+.plan-card.locked-relation .avatar {
   filter: blur(1px) grayscale(.35);
 }
 
@@ -1845,6 +1921,8 @@ textarea {
   outline: 2px solid transparent;
 }
 
+.cluster-root[hidden], .cluster-person[hidden] { display: none; }
+
 .cluster-root:hover, .cluster-person:hover,
 .cluster-root.focused, .cluster-person.focused {
   transform: translateY(-3px) scale(1.04);
@@ -1858,6 +1936,11 @@ textarea {
 .p3 { left: 116px; top: 142px; }
 .p4 { right: 116px; top: 142px; }
 .locked { filter: blur(1.5px) grayscale(.6); opacity: .48; }
+.cluster-person.locked,
+.cluster-root.locked {
+  background: rgba(255,255,255,.72);
+  color: transparent;
+}
 
 .person-network-panel {
   position: absolute;
@@ -1920,6 +2003,12 @@ textarea {
   color: transparent;
   filter: blur(2px) grayscale(.55);
   opacity: .48;
+}
+
+.micro-node.locked-micro-node {
+  color: transparent;
+  filter: blur(1.6px) grayscale(.5);
+  opacity: .5;
 }
 
 .locked-preview {
@@ -2105,6 +2194,45 @@ textarea {
   background: var(--indigo);
   transform: rotate(-45deg);
 }
+
+.chat-unarchive-icon::before {
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--indigo);
+  border-radius: 5px;
+}
+
+.chat-unarchive-icon::after {
+  width: 9px;
+  height: 9px;
+  border-top: 2px solid var(--indigo);
+  border-left: 2px solid var(--indigo);
+  transform: translateY(2px) rotate(45deg);
+}
+
+.chat-delete-archived-icon {
+  border-color: rgba(181,73,95,.25);
+}
+
+.chat-delete-archived-icon::before {
+  width: 17px;
+  height: 17px;
+  border: 2px solid #b5495f;
+  border-radius: 50%;
+}
+
+.chat-delete-archived-icon::after {
+  width: 13px;
+  height: 2px;
+  border-radius: 999px;
+  background: #b5495f;
+  transform: rotate(45deg);
+}
+
+.archived-chat-card {
+  background: rgba(248,247,255,.92);
+}
+
 .chat-card.share-mode .share-contact {
   grid-column: 2;
   justify-self: start;
@@ -2393,6 +2521,35 @@ textarea {
   font: inherit;
   color: var(--ink);
   background: rgba(255,255,255,.86);
+}
+
+.feedback-card {
+  width: min(390px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: auto;
+}
+
+.feedback-card label {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: var(--charcoal);
+  font-weight: 850;
+}
+
+.feedback-card textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.feedback-card select {
+  min-height: 46px;
+  border: 1px solid rgba(124,114,255,.18);
+  border-radius: 18px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: rgba(255,255,255,.9);
+  font: inherit;
 }
 
 .avatar-img {
@@ -2738,10 +2895,30 @@ textarea {
   color: var(--charcoal);
   background: rgba(238,234,254,.54);
   font-weight: 820;
+  position: relative;
 }
 
 .profile-menu button:hover {
   color: var(--indigo);
+}
+
+.profile-menu button[data-count]:not([data-count=""])::after {
+  content: attr(data-count);
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: var(--indigo);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .profile-avatar {
@@ -3177,6 +3354,25 @@ textarea {
   line-height: 1;
 }
 
+.app-notification-badge {
+  position: absolute;
+  top: 5px;
+  right: 13px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--indigo);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 900;
+  border: 3px solid rgba(255, 255, 255, .96);
+  box-shadow: 0 7px 16px rgba(124, 114, 255, .24);
+}
+
 #edit-plan .network-header {
   align-items: flex-start;
 }
@@ -3314,6 +3510,13 @@ textarea {
 .form-card {
   display: grid;
   gap: 14px;
+}
+
+.form-card input[type="date"],
+.form-card input[type="time"] {
+  min-width: 0;
+  font-size: clamp(13px, 3.45vw, 16px);
+  line-height: 1.1;
 }
 
 .form-grid.two {
@@ -3904,6 +4107,13 @@ textarea {
   gap: 8px;
 }
 
+.notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .notification-card > span {
   color: var(--indigo);
   font-size: 12px;
@@ -3926,6 +4136,18 @@ textarea {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.request-actions.status-only span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--slate);
+  background: rgba(238,234,254,.74);
+  font-size: 12px;
+  font-weight: 820;
 }
 
 .request-actions button:nth-child(2) {
@@ -4089,6 +4311,20 @@ textarea {
   margin: 0;
   color: var(--slate);
   line-height: 1.42;
+}
+
+.legal-copy {
+  display: grid;
+  gap: 12px;
+}
+
+.developer-warning {
+  border-color: rgba(124,114,255,.18);
+  background: rgba(238,234,254,.7);
+}
+
+.developer-actions {
+  grid-template-columns: 1fr;
 }
 
 .participant-strip {

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="6dgrs">
+  <defs>
+    <linearGradient id="bg" x1="72" x2="440" y1="72" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDFBFF"/>
+      <stop offset=".55" stop-color="#EEF5FF"/>
+      <stop offset="1" stop-color="#F4F0FF"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="128" x2="392" y1="132" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6C63FF"/>
+      <stop offset="1" stop-color="#67D4C9"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="106" fill="none" stroke="#D9D4FF" stroke-width="18"/>
+  <circle cx="162" cy="214" r="32" fill="url(#mark)"/>
+  <circle cx="256" cy="154" r="32" fill="url(#mark)"/>
+  <circle cx="350" cy="214" r="32" fill="url(#mark)"/>
+  <circle cx="202" cy="334" r="32" fill="url(#mark)"/>
+  <circle cx="310" cy="334" r="32" fill="url(#mark)"/>
+  <path d="M162 214 256 154 350 214M162 214l40 120M350 214l-40 120M202 334h108" fill="none" stroke="#BDB7FF" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="58" fill="url(#mark)"/>
+  <text x="256" y="275" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="900" fill="#fff">6</text>
+</svg>

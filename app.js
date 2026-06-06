@@ -35,11 +35,14 @@ let selectedChatName = "Emma Laurent";
 let selectedChatPath = "You → Laura → Emma";
 let selectedChatPreview = "Friday works. Laura vouched for you.";
 let pendingArchiveChatCard = null;
+let pendingDeleteChatKey = "";
+let pendingDeleteChatName = "";
 let introThreadStarted = false;
 let introThreadLeft = false;
 let chatReturnTarget = "home";
 let activeSettingsDetail = "phone";
 const removedConnections = new Set();
+const deletedChatKeys = new Set();
 const screenHistory = [];
 const rootScreens = new Set(["welcome", "home", "network-list", "chats", "my-profile"]);
 const dirtyScreens = new Set(["basics", "profile-setup", "trip", "request-intro", "create-plan", "edit-plan", "edit-profile", "plan-chat"]);
@@ -77,6 +80,7 @@ const backFallbacks = {
   "how-works": "my-profile",
   profile: "home"
 };
+const prototypeStorageKey = "sixdgrsPrototypeState";
 const trustedFriendState = {
   used: 4,
   launchCap: 6,
@@ -115,7 +119,12 @@ const appState = {
   introRequestDeclined: false,
   introRequestAccepted: false,
   notificationsRead: false,
-  generatedTrips: 0
+  generatedTrips: 0,
+  confirmedMeetups: [],
+  metConnections: [],
+  trustedConnections: [],
+  vouchedConnections: [],
+  feedback: []
 };
 
 const notificationItems = [
@@ -323,6 +332,7 @@ function tripById(id) {
 function getHomeSelectorContext() {
   const selectedTrip = tripById(activeHomeTripId) || getSelectedHomeTrip();
   if (homeFilter === "same") {
+    if (!selectedTrip?.city || !selectedTrip?.start) return { type: "empty-trip" };
     return { type: "trip", city: selectedTrip.city, trip: selectedTrip };
   }
   if (homeFilter === "in-town" || homeFilter === "locals") {
@@ -384,6 +394,14 @@ function renderTripEditor() {
   if (saveButton) saveButton.textContent = isEditing ? "Save Changes" : "Save Trip";
   if (skipButton) skipButton.textContent = isEditing ? "Cancel" : "I'll do it later";
 
+  if (isEditing && !trip) {
+    tripEditorMode = "create";
+    editingTripId = null;
+    showUtilityFeedback("Trip unavailable", "This trip could not be loaded. It may have been deleted or reset in Developer Mode.");
+    showScreen("all-trips", { replace: true });
+    return;
+  }
+
   if (!isEditing || !trip) return;
   if (destination) destination.value = [trip.city, trip.country].filter(Boolean).join(", ");
   if (start) start.value = trip.start || "";
@@ -427,6 +445,7 @@ function saveEditedTrip() {
   renderHomeTripSelect();
   renderHomePeople();
   renderHomeSuggestions();
+  persistPrototypeState();
   markScreenClean("trip");
   showScreen("all-trips", { replace: true });
 }
@@ -469,6 +488,7 @@ function personTripInCity(person, context) {
 
 function personTripOverlaps(person, context) {
   const trip = context?.trip || context;
+  if (!trip?.city || !trip?.start || !trip?.end) return false;
   return (person.trips || []).some((personTrip) => (
     sameCity(personTrip.city, trip?.city) &&
     datesOverlap(personTrip.start, personTrip.end, trip.start, trip.end)
@@ -476,6 +496,7 @@ function personTripOverlaps(person, context) {
 }
 
 function personMatchesSelectedTrip(person, trip) {
+  if (trip?.type === "empty-trip") return false;
   if (!trip) return person.featured;
   if (homeFilter === "locals") return personLivesInTripCity(person, trip);
   if (homeFilter === "in-town") return personLivesInTripCity(person, trip) || personVisitsTripCity(person, trip);
@@ -484,7 +505,9 @@ function personMatchesSelectedTrip(person, trip) {
 }
 
 function planMatchesHomeFilter(plan, trip) {
+  if (trip?.type === "empty-trip") return false;
   if (!trip) return true;
+  if (homeFilter === "same" && !trip?.city) return false;
   const planInCity = sameCity(plan.city, trip.city);
   if (homeFilter === "same") return planInCity;
   if (homeFilter === "locals") return planInCity && plan.visibility !== "Invite link only";
@@ -493,27 +516,52 @@ function planMatchesHomeFilter(plan, trip) {
 }
 
 function planRelationshipLabel(plan) {
-  const pathParts = (plan.path || "").split("->").map((part) => part.trim());
-  if (pathParts.length > 2) return `Mutual via ${pathParts[1]}`;
+  const parts = pathParts(plan.path || "");
+  if (parts.length > 2) return `Mutual via ${parts[1]}`;
   if (plan.visibility.includes("2nd")) return "2nd Degree";
   if (plan.visibility.includes("Trusted")) return "Trusted Network";
   if (plan.visibility.includes("Mutual")) return "Mutual connections";
   return plan.visibility;
 }
 
+function planTrustState(plan) {
+  if (plan.mine || plan.host === "You" || plan.host === "Hugo" || plan.role === "hosting") {
+    return { active: true, locked: false, label: "Hosted by You", action: "Manage Plan" };
+  }
+  if (plan.role === "attending" || plan.role === "pending" || plan.role === "past" || ["accepted", "pending", "past"].includes(plan.viewerStatus)) {
+    return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Open" };
+  }
+  if (isTrustedConnection(plan.host) || isMetConnection(plan.host)) {
+    return { active: true, locked: false, label: isTrustedConnection(plan.host) ? "Trusted Host" : "Met Host", action: "Request to Join" };
+  }
+  if (isActiveTrustPath(plan.path, plan.host)) {
+    return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Request to Join" };
+  }
+  const oldPath = archivedPath(pathParts(plan.path).length ? [plan.path] : [], plan.host);
+  return {
+    active: false,
+    locked: true,
+    archived: true,
+    label: "Locked Path",
+    action: "Locked Path",
+    note: `Previously reachable${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""}. Reopen the trust path to request this plan.`
+  };
+}
+
 function homePlanCard(plan, index = 0) {
   const max = Math.min(plan.max, 6);
   const spotsLeft = Math.max(0, max - plan.joined);
+  const trustState = planTrustState(plan);
   return `
-    <article class="plan-card compact home-discovery-plan" data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">
+    <article class="plan-card compact home-discovery-plan ${trustState.locked ? "locked-relation" : ""}" ${trustState.locked ? "" : `data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable"`}>
       <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
       <div>
         <h3>${plan.name}</h3>
-        <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${planRelationshipLabel(plan)}</span></div>
+        <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${trustState.label}</span></div>
         <p>${plan.location}${plan.city ? `, ${plan.city}` : ""}</p>
         <div class="plan-meta"><span>${plan.time}</span><span>${plan.joined}/${max} attending</span><span>${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left</span></div>
       </div>
-      <button data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">Request to Join</button>
+      <button ${trustState.locked ? "disabled" : `data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable"`}>${trustState.action}</button>
     </article>
   `;
 }
@@ -598,7 +646,7 @@ function bestTripOverlap(person) {
 }
 
 function mutualCount(person) {
-  return Math.max(0, (person.path || "").split("->").length - 2);
+  return Math.max(0, pathParts(person.path || "").length - 2);
 }
 
 function suggestedConnectionScore(person) {
@@ -611,7 +659,8 @@ function suggestedConnectionScore(person) {
   let score = sharedTags * 3 + sharedPlans * 2 + bioHits * 2 + mutuals + (cityOverlap ? 2 : 0);
   if (overlap) score += 7 + overlap.overlap;
   if (person.featured) score += 2;
-  if (person.met) score += 1;
+  if (person.met || isMetConnection(person.name)) score += 2;
+  if (isTrustedConnection(person.name)) score += 3;
   if (person.locked) score -= 4;
 
   let reason = "You may get along";
@@ -622,7 +671,7 @@ function suggestedConnectionScore(person) {
   else if (sharedPlans >= 2) reason = "Both like low-key plans";
   else if (bioHits >= 2) reason = "Similar profile energy";
   else if (mutuals > 1) reason = `${mutuals} mutual trusted friends`;
-  else if (mutuals === 1) reason = `Trusted through ${(person.path || "").split("->")[1]?.trim() || "a mutual"}`;
+  else if (mutuals === 1) reason = `Trusted through ${pathParts(person.path || "")[1] || "a mutual"}`;
   else if (cityOverlap) reason = `Active in ${person.livesIn || person.city}`;
 
   const tagReasons = [...semanticSet(person.tags || [])].filter((tag) => semanticSet(myConnectionSignal.tags).has(tag));
@@ -636,7 +685,7 @@ function suggestedConnectionScore(person) {
   if (sharedPlans >= 2) reasons.push("join similar low-key plans");
   if (bioHits >= 2) reasons.push("have similar profile energy");
   if (!reasons.length && mutuals > 1) reasons.push(`share ${mutuals} trusted connections`);
-  if (!reasons.length && mutuals === 1) reasons.push(`know ${(person.path || "").split("->")[1]?.trim() || "a mutual"}`);
+  if (!reasons.length && mutuals === 1) reasons.push(`know ${pathParts(person.path || "")[1] || "a mutual"}`);
   if (!reasons.length) reasons.push(reason.toLowerCase());
 
   return { person, score, reason, reasons: [...new Set(reasons)].slice(0, 2) };
@@ -644,7 +693,10 @@ function suggestedConnectionScore(person) {
 
 function suggestedConnections() {
   const ranked = homePeople
-    .filter((person) => !person.locked && !connectionStateForPerson(person)?.locked)
+    .filter((person) => {
+      const state = connectionStateForPerson(person);
+      return !person.locked && !state?.locked && !state?.archived;
+    })
     .map(suggestedConnectionScore)
     .sort((a, b) => b.score - a.score);
   const stable = ranked.slice(0, 2);
@@ -895,6 +947,108 @@ const personProfiles = {
     instagram: "theo.jensen",
     trips: [],
     plans: { hosting: [], attending: [], past: [] }
+  },
+  "Sofia Marin": {
+    name: "Sofia Marin",
+    initials: "SM",
+    city: "Barcelona",
+    homeCity: "Barcelona",
+    relationship: "Mutual via Laura",
+    path: "You -> Laura -> Sofia",
+    paths: ["You -> Laura -> Sofia"],
+    action: "Request Intro",
+    bio: "Barcelona-based trusted mutual who prefers small, thoughtful plans and calm local introductions.",
+    interests: ["Local Host", "Coffee Spots", "Hidden Gems"],
+    stats: "8 countries visited · 4 trusted hubs",
+    vouches: [["Laura", "\"Thoughtful and easy to host.\""]],
+    instagram: "sofia.marin",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Ari Patel": {
+    name: "Ari Patel",
+    initials: "AP",
+    city: "London",
+    homeCity: "London",
+    relationship: "Met",
+    path: "Met at Coffee in Shoreditch",
+    directRelationship: "Met",
+    action: "Request Trusted Connection",
+    bio: "London-based coffee and gallery person who likes low-key plans with trusted mutuals.",
+    interests: ["Coffee Spots", "Galleries", "Low-key Plans"],
+    stats: "6 countries visited · 3 trusted hubs",
+    vouches: [["Theo", "\"Reliable and kind in small groups.\""]],
+    instagram: "ari.patel",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Mina Aoki": {
+    name: "Mina Aoki",
+    initials: "MA",
+    city: "Tokyo",
+    homeCity: "Tokyo",
+    relationship: "Met",
+    path: "Met at Gallery visit in Mayfair",
+    directRelationship: "Met",
+    action: "Request Trusted Connection",
+    bio: "Tokyo local who loves design hotels, quiet food spots, and thoughtful city rituals.",
+    interests: ["Design Hotels", "Foodie", "Slow Travel"],
+    stats: "13 countries visited · 6 trusted hubs",
+    vouches: [["Emma", "\"Generous with local recommendations.\""]],
+    instagram: "mina.aoki",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Ines Costa": {
+    name: "Ines Costa",
+    initials: "IC",
+    city: "Barcelona",
+    homeCity: "Barcelona",
+    relationship: "Mutual via Emma",
+    path: "You -> Emma -> Ines",
+    paths: ["You -> Emma -> Ines"],
+    action: "Request Intro",
+    bio: "Barcelona local for thoughtful dinners, sunrise walks, and espresso spots.",
+    interests: ["Coffee Spots", "Foodie", "Local Host"],
+    stats: "7 countries visited · 4 trusted hubs",
+    vouches: [["Emma", "\"A warm local connector.\""]],
+    instagram: "ines.costa",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Jonas Berg": {
+    name: "Jonas Berg",
+    initials: "JB",
+    city: "Oslo",
+    homeCity: "Oslo",
+    relationship: "Introduced via Theo",
+    path: "Hugo -> Theo -> Jonas",
+    paths: ["Hugo -> Theo -> Jonas"],
+    action: "Message",
+    bio: "Oslo trusted mutual interested in city hubs, coffee walks, and low-key plans.",
+    interests: ["Coffee Spots", "City Hubs", "Slow Travel"],
+    stats: "5 countries visited · 2 trusted hubs",
+    vouches: [["Theo", "\"A careful, thoughtful introduction.\""]],
+    instagram: "jonas.berg",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
+  },
+  "Mary Chen": {
+    name: "Mary Chen",
+    initials: "MC",
+    city: "London",
+    homeCity: "London",
+    relationship: "Introduced via Maya",
+    path: "Hugo -> Maya -> Mary",
+    paths: ["Hugo -> Maya -> Mary"],
+    action: "Message",
+    bio: "London mutual who likes quiet dinner plans, galleries, and warm introductions.",
+    interests: ["Dinner Plans", "Galleries", "Hidden Gems"],
+    stats: "9 countries visited · 5 trusted hubs",
+    vouches: [["Maya", "\"Good energy for small trusted plans.\""]],
+    instagram: "mary.chen",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] }
   }
 };
 
@@ -936,6 +1090,345 @@ const clusterNetworks = {
   Mina: { state: "locked", path: "Met only · network stays locked until upgrade", people: ["Locked", "Locked", "Locked"] }
 };
 
+function readPrototypeState() {
+  try {
+    return JSON.parse(window.localStorage.getItem(prototypeStorageKey) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function mergeObject(target, source) {
+  if (!source || typeof source !== "object") return;
+  Object.entries(source).forEach(([key, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value) && target[key] && typeof target[key] === "object") {
+      mergeObject(target[key], value);
+    } else {
+      target[key] = value;
+    }
+  });
+}
+
+function replaceArray(target, source) {
+  if (Array.isArray(source)) target.splice(0, target.length, ...source);
+}
+
+function applyStoredPrototypeState() {
+  const stored = readPrototypeState();
+  mergeObject(settingsState, stored.settingsState);
+  mergeObject(appState, stored.appState);
+  replaceArray(notificationItems, stored.notificationItems);
+  replaceArray(planJoinRequests, stored.planJoinRequests);
+  replaceArray(myTrips, stored.myTrips);
+  replaceArray(homeTrips, stored.homeTrips);
+  replaceArray(homePeople, stored.homePeople);
+  replaceArray(networkPeople, stored.networkPeople);
+  replaceArray(discoverablePlans, stored.discoverablePlans);
+  if (stored.connectionRequests && typeof stored.connectionRequests === "object") {
+    Object.entries(stored.connectionRequests).forEach(([group, requests]) => {
+      if (connectionRequests[group]) replaceArray(connectionRequests[group], requests);
+    });
+  }
+  if (stored.myPlans && typeof stored.myPlans === "object") {
+    Object.entries(stored.myPlans).forEach(([group, plans]) => {
+      if (myPlans[group]) replaceArray(myPlans[group], plans);
+    });
+  }
+  if (stored.chats && typeof stored.chats === "object") {
+    Object.entries(stored.chats).forEach(([group, items]) => {
+      if (chats[group]) replaceArray(chats[group], items);
+    });
+  }
+  if (Array.isArray(stored.removedConnections)) {
+    removedConnections.clear();
+    stored.removedConnections.forEach((name) => removedConnections.add(name));
+  }
+  if (Array.isArray(stored.deletedChatKeys)) {
+    deletedChatKeys.clear();
+    stored.deletedChatKeys.forEach((key) => deletedChatKeys.add(key));
+  }
+  mergeObject(trustedFriendState, stored.trustedFriendState);
+  if (typeof stored.instagramAccessUnlocked === "boolean") instagramAccessUnlocked = stored.instagramAccessUnlocked;
+  if (typeof stored.introThreadStarted === "boolean") introThreadStarted = stored.introThreadStarted;
+  if (typeof stored.introThreadLeft === "boolean") introThreadLeft = stored.introThreadLeft;
+  if (typeof stored.activeHomeTripId === "string") activeHomeTripId = stored.activeHomeTripId;
+  if (typeof stored.activeHomeCity === "string") activeHomeCity = stored.activeHomeCity;
+  if (typeof stored.activeHomeSelectorValue === "string") activeHomeSelectorValue = stored.activeHomeSelectorValue;
+  if (typeof stored.homeFilter === "string") homeFilter = stored.homeFilter;
+}
+
+function persistPrototypeState() {
+  const snapshot = {
+    settingsState,
+    appState,
+    notificationItems,
+    connectionRequests,
+    planJoinRequests,
+    myPlans,
+    chats,
+    myTrips,
+    homeTrips,
+    homePeople,
+    networkPeople,
+    discoverablePlans,
+    removedConnections: [...removedConnections],
+    deletedChatKeys: [...deletedChatKeys],
+    trustedFriendState,
+    instagramAccessUnlocked,
+    introThreadStarted,
+    introThreadLeft,
+    activeHomeTripId,
+    activeHomeCity,
+    activeHomeSelectorValue,
+    homeFilter
+  };
+  try {
+    window.localStorage.setItem(prototypeStorageKey, JSON.stringify(snapshot));
+  } catch {
+    // Local persistence is best-effort in the static prototype.
+  }
+  updateNotificationBadges();
+}
+
+function activeNotificationCount() {
+  return notificationItems.filter((item) => item.active).length;
+}
+
+function updateNotificationBadges() {
+  const count = activeNotificationCount();
+  document.querySelectorAll("#home .icon-button[data-next='notifications']").forEach((button) => {
+    let badge = button.querySelector(".app-notification-badge");
+    if (!count) {
+      badge?.remove();
+      button.setAttribute("aria-label", "Notifications");
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "app-notification-badge";
+      button.appendChild(badge);
+    }
+    badge.textContent = String(count);
+    button.setAttribute("aria-label", `${count} notifications`);
+  });
+  const profileNotification = document.querySelector("#profileMenu [data-next='notifications']");
+  if (profileNotification) {
+    profileNotification.dataset.count = count ? String(count) : "";
+  }
+}
+
+function upsertNotification(item) {
+  const existing = notificationItems.find((notification) => notification.id === item.id);
+  if (existing) {
+    Object.assign(existing, item, { active: true });
+  } else {
+    notificationItems.unshift({ ...item, active: true });
+  }
+  appState.notificationsRead = false;
+}
+
+function upsertConnectionRequest(group, request) {
+  const requests = connectionRequests[group];
+  if (!requests) return;
+  const existing = requests.find((item) => item.name === request.name && item.type === request.type);
+  if (existing) {
+    Object.assign(existing, request);
+  } else {
+    requests.unshift(request);
+  }
+}
+
+function upsertPlanJoinRequest(request) {
+  const existing = planJoinRequests.find((item) => item.name === request.name && item.path === request.path);
+  if (existing) {
+    Object.assign(existing, request);
+  } else {
+    planJoinRequests.unshift(request);
+  }
+  syncPlanRequestCounts();
+}
+
+function upsertChat(filter, chat) {
+  const target = chats[filter];
+  if (!target) return;
+  const existing = target.find((item) => item.name === chat.name && item.chatType === chat.chatType);
+  if (existing) {
+    Object.assign(existing, chat);
+  } else {
+    target.unshift(chat);
+  }
+  deletedChatKeys.delete(chatKey(chat));
+  deletedChatKeys.delete(chatKey(chat.name));
+}
+
+function chatKey(chat = {}) {
+  if (typeof chat === "string") return `${chat}::`.toLowerCase();
+  return `${chat.name || "chat"}::${chat.chatType || chat.type || ""}`.toLowerCase();
+}
+
+function isChatDeleted(chat = {}) {
+  return deletedChatKeys.has(chatKey(chat)) || deletedChatKeys.has(chatKey(chat.name || chat));
+}
+
+function findChatByName(name) {
+  return Object.values(chats).flat().find((chat) => chat.name === name && !isChatDeleted(chat));
+}
+
+function allUniqueChats() {
+  const seen = new Set();
+  return Object.values(chats).flat().filter((chat) => {
+    if (isChatDeleted(chat)) return false;
+    const key = chatKey(chat);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function addNotificationEvent(kind) {
+  const now = Date.now();
+  const events = {
+    introRequest: {
+      id: `dev-intro-${now}`,
+      kind: "intro",
+      title: "Intro request received",
+      body: "Noah asked Laura to introduce you.",
+      profile: "Noah Silva"
+    },
+    acceptedIntro: {
+      id: `dev-accepted-intro-${now}`,
+      kind: "open-chat",
+      title: "Intro accepted",
+      body: "Laura introduced Hugo and Emma.",
+      profile: "Emma Laurent",
+      chatType: "intro_chat"
+    },
+    declinedIntro: {
+      id: `dev-declined-intro-${now}`,
+      kind: "profile",
+      title: "Intro request closed",
+      body: "Laura replied not right now.",
+      profile: "Laura Chen"
+    },
+    introChat: {
+      id: `dev-intro-chat-${now}`,
+      kind: "open-chat",
+      title: "Intro chat created",
+      body: "Hugo and Emma can now chat through Laura's introduction.",
+      profile: "Emma Laurent",
+      chatType: "intro_chat"
+    },
+    directChat: {
+      id: `dev-direct-chat-${now}`,
+      kind: "open-chat",
+      title: "Direct chat opened",
+      body: "Emma is ready to continue the conversation.",
+      profile: "Emma Laurent",
+      chatType: "direct_connection_chat"
+    },
+    planChat: {
+      id: `dev-plan-chat-${now}`,
+      kind: "open-chat",
+      title: "Plan chat updated",
+      body: "Coffee in Shoreditch has new plan chat activity.",
+      profile: "Coffee in Shoreditch",
+      chatType: "plan_chat"
+    },
+    planJoin: {
+      id: `dev-plan-join-${now}`,
+      kind: "plan",
+      title: "Plan join request",
+      body: "Noah requested to join Coffee in Shoreditch.",
+      profile: "Noah Silva"
+    },
+    planApproval: {
+      id: `dev-plan-approval-${now}`,
+      kind: "plan-view",
+      title: "Plan request approved",
+      body: "Your developer coffee plan was added to pending plans."
+    },
+    trip: {
+      id: `dev-trip-${now}`,
+      kind: "home",
+      title: "Trip overlap found",
+      body: "A new Madrid trip created trusted overlap signals."
+    },
+    tripOverlap: {
+      id: `dev-trip-overlap-${now}`,
+      kind: "home",
+      title: "Trip overlap found",
+      body: "Emma will also be in Barcelona during your travel dates."
+    }
+  };
+  if (events[kind]) upsertNotification(events[kind]);
+}
+
+function syncPlanRequestCounts() {
+  const requestCount = planJoinRequests.length;
+  if (myPlans.hosting[0]) {
+    myPlans.hosting[0].status = requestCount
+      ? `${requestCount} pending request${requestCount === 1 ? "" : "s"}`
+      : "No pending requests";
+  }
+}
+
+function publishCreatedPlan() {
+  const screen = document.querySelector("#create-plan");
+  const fields = screen?.querySelectorAll("input, select") || [];
+  const title = fields[0]?.value.trim() || "New trusted plan";
+  const locationValue = fields[1]?.value.trim() || "London";
+  const dateValue = fields[2]?.value || "";
+  const timeValue = fields[3]?.value || "";
+  const maxValue = Math.min(Number(fields[4]?.value || 4), 6);
+  const visibility = fields[5]?.value || "Mutual connections";
+  const [location = locationValue] = locationValue.split(",").map((part) => part.trim()).filter(Boolean);
+  const displayDate = dateValue ? new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" }) : "Soon";
+  const displayTime = timeValue || "TBC";
+  const plan = {
+    name: title,
+    host: "You",
+    path: "Hosted by you",
+    time: `${displayDate}, ${displayTime}`,
+    location,
+    joined: 1,
+    max: maxValue,
+    visibility,
+    status: "No pending requests",
+    role: "hosting",
+    mine: true
+  };
+  upsertPlan("hosting", plan);
+  selectedPlanName = plan.name;
+  selectedPlanStatus = "hosting";
+  syncPlanRequestCounts();
+  persistPrototypeState();
+}
+
+function upsertPlan(group, plan) {
+  const target = myPlans[group];
+  if (!target) return;
+  const existing = target.find((item) => item.name === plan.name);
+  if (existing) {
+    Object.assign(existing, plan);
+  } else {
+    target.unshift(plan);
+  }
+}
+
+function emptyState(title, body, action = "") {
+  return `
+    <div class="empty-card polished-empty-state">
+      <strong>${title}</strong>
+      <p>${body}</p>
+      ${action}
+    </div>
+  `;
+}
+
+function unavailableState(title, body, actionLabel = "Go back") {
+  return emptyState(title, body, `<button type="button" class="soft-action" data-back>${actionLabel}</button>`);
+}
+
 function activeScreenId() {
   return document.querySelector(".screen.active")?.dataset.screen || "welcome";
 }
@@ -976,6 +1469,7 @@ function showScreen(id, options = {}) {
   if (id === "request-intro") renderIntroMethod(introMethod);
   if (id === "nearby-people") renderNearbyPeoplePage();
   if (id === "suggested-connections") renderSuggestedConnectionsPage();
+  if (id === "network-map") renderCityHub(document.querySelector(".city-node.active")?.dataset.city || "Oslo");
   if (id === "all-trips") renderAllTrips();
   if (id === "trip") renderTripEditor();
   if (id === "my-plans") renderMyPlans();
@@ -991,6 +1485,7 @@ function showScreen(id, options = {}) {
   if (id === "settings-detail") renderSettingsDetail();
   if (id === "notifications") renderNotifications();
   if (id === "profile") renderProfile();
+  updateNotificationBadges();
 }
 
 function confirmDiscardChanges(onDiscard) {
@@ -1078,6 +1573,7 @@ function confirmDeleteTrip(tripId) {
       renderHomeTripSelect();
       renderHomePeople();
       renderHomeSuggestions();
+      persistPrototypeState();
       showScreen("all-trips", { replace: true });
     }
   });
@@ -1107,20 +1603,22 @@ function confirmRemoveConnection(name) {
     }
     if (event.target.closest("[data-confirm-remove-connection]")) {
       removedConnections.add(name);
+      removeGraphFlag("trustedConnections", name);
+      removeGraphFlag("metConnections", name);
       if (profile.directRelationship === "Trusted Friend" && trustedFriendState.used > 0) trustedFriendState.used -= 1;
+      Object.values(chats).flat().forEach((chat) => {
+        if (chat.name === name || pathDependsOnRemoved(chat.path, chat.name)) chat.archived = true;
+      });
       dialog.remove();
-      renderProfile();
-      renderHomePeople();
-      renderHomeSuggestions();
-      renderNetworkLists();
-      renderTrustCaps();
+      showUtilityFeedback("Network path archived", `${profile.name.split(" ")[0]}'s active branch was removed. Dependent paths are now archived or locked until the path reopens.`);
+      refreshTrustGraphViews();
     }
   });
   document.body.append(dialog);
 }
 
 function confirmReconnection(name) {
-  const profile = personProfiles[name];
+  const profile = profileForName(name);
   if (!profile) return;
   document.querySelector(".discard-dialog")?.remove();
   const firstName = profile.name.split(" ")[0];
@@ -1142,8 +1640,15 @@ function confirmReconnection(name) {
       return;
     }
     if (event.target.closest("[data-send-reconnect]")) {
+      removedConnections.delete([...removedConnections].find((removed) => nameKey(removed) === nameKey(name)) || name);
+      addGraphFlag("trustedConnections", name);
+      if (profile.directRelationship === "Trusted Friend" && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+      Object.values(chats).flat().forEach((chat) => {
+        if (chat.name === name || pathParts(chat.path).some((part) => nameKey(part) === nameKey(name))) chat.archived = false;
+      });
       dialog.remove();
-      renderProfile();
+      showUtilityFeedback("Path reopened", `${firstName}'s trusted branch is active again. Dependent people, plans and city routes can reopen where the path is valid.`);
+      refreshTrustGraphViews();
     }
   });
   document.body.append(dialog);
@@ -1197,10 +1702,21 @@ function profileForName(name = "") {
 
 function openDirectChatWith(name = "Emma Laurent", options = {}) {
   const profile = profileForName(name);
+  const isKnownDemoUser = name === "Hugo" || name === "You";
+  if (!profile && !isKnownDemoUser && !options.allowUnavailable) {
+    showUtilityFeedback("Chat unavailable", "This person cannot be messaged right now. Their profile may be locked, archived, or unavailable.");
+    return;
+  }
+  const requestedMode = options.mode || "";
+  const normalizedMode = requestedMode === "intro_chat"
+    ? "intro-group"
+    : requestedMode === "intro_request"
+      ? "intro-request"
+      : requestedMode;
   selectedChatName = profile?.name || name;
   selectedChatPath = options.path || profile?.path || "Direct conversation";
   selectedChatPreview = options.preview || `Message ${selectedChatName.split(" ")[0]}.`;
-  activeChatDetailMode = options.mode || (profile?.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat");
+  activeChatDetailMode = normalizedMode || (profile?.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat");
   chatMode = "default";
   showScreen("chat-detail");
 }
@@ -1226,7 +1742,8 @@ function renderNotifications() {
       actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
     }
     return `<article class="notification-card" data-notification-card="${item.id}"><span>${item.title}</span><strong>${item.body}</strong>${actions}</article>`;
-  }).join("") : `<div class="empty-card">No active notifications.</div>`;
+  }).join("") : emptyState("No notifications yet", "Intro requests, plan updates and trip overlaps will appear here.", `<button type="button" class="soft-action" data-settings-detail="developer">Generate test activity</button>`);
+  updateNotificationBadges();
 }
 
 function renderSettingsDetail() {
@@ -1259,12 +1776,12 @@ function renderSettingsDetail() {
     blocked: {
       title: "Blocked Users",
       copy: "View and manage people removed from your visible trusted graph.",
-      body: `<section class="settings-section detail-actions">${settingsState.blockedUsers.map((name) => `<button type="button" data-unblock-user="${name}">${name}<span>Unblock</span></button>`).join("") || `<div class="empty-card">No blocked users.</div>`}</section>`
+      body: `<section class="settings-section detail-actions">${settingsState.blockedUsers.map((name) => `<button type="button" data-unblock-user="${name}">${name}<span>Unblock</span></button>`).join("") || emptyState("No blocked users", "People you block will appear here so you can unblock them later.")}</section>`
     },
     reports: {
       title: "Report History",
       copy: "Review submitted reports and keep a record of safety actions.",
-      body: `<section class="settings-section detail-actions">${settingsState.reportHistory.map((item) => `<button type="button" data-settings-feedback="Report opened">${item}<span>View</span></button>`).join("")}<button type="button" class="muted-plan-action" data-clear-report-history>Clear report history<span>Local history only</span></button></section>`
+      body: `<section class="settings-section detail-actions">${settingsState.reportHistory.map((item) => `<button type="button" data-settings-feedback="Report opened">${item}<span>View</span></button>`).join("") || emptyState("No report history", "Reports and safety notes you submit during testing will appear here.")}<button type="button" class="muted-plan-action" data-clear-report-history>Clear report history<span>Local history only</span></button></section>`
     },
     verification: {
       title: "Verification Settings",
@@ -1294,7 +1811,7 @@ function renderSettingsDetail() {
     developer: {
       title: "Developer Mode",
       copy: "Internal testing tools. This will be removed before launch.",
-      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
+      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-chat">Generate Plan Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="trip-overlap">Generate Trip Overlap</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="empty-states">Show Empty States</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
     }
   };
   const page = pages[detail] || pages.phone;
@@ -1342,11 +1859,139 @@ function confirmDeleteAccountFinal() {
   dialog.innerHTML = `
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Final delete account confirmation">
       <strong>Final confirmation</strong>
-      <p>Deleting removes your account from this prototype flow. Past trust history would require backend handling in production.</p>
+      <p>Deleting removes your account from this prototype flow. Type DELETE to confirm this destructive action.</p>
+      <input id="deleteConfirmInput" class="modal-input" placeholder="Type DELETE" autocomplete="off" />
+      <small id="deleteConfirmError" class="modal-error" aria-live="polite"></small>
       <div><button type="button" data-dialog-close>Keep Account</button><button type="button" data-confirm-delete-account>Delete Account</button></div>
     </div>
   `;
   document.body.append(dialog);
+}
+
+function openSafetyAction(label = "") {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("report")) {
+    showSafetyModal({
+      title: "Report a user",
+      body: "Tell us what happened. This is stored locally in the prototype and would be sent privately to safety support in beta.",
+      placeholder: "Add report details",
+      action: "Submit Report",
+      type: "report"
+    });
+    return;
+  }
+  if (normalized.includes("block")) {
+    showSafetyModal({
+      title: "Block someone",
+      body: "Blocking removes the person from your visible trusted graph in this prototype.",
+      placeholder: "Name of person to block",
+      action: "Block User",
+      type: "block"
+    });
+    return;
+  }
+  if (normalized.includes("contact")) {
+    showSafetyModal({
+      title: "Contact us",
+      body: "Send a note to the 6dgrs team. This is saved locally in the prototype.",
+      placeholder: "How can we help?",
+      action: "Send Message",
+      type: "contact"
+    });
+    return;
+  }
+  showUtilityFeedback("Meeting safety guidance", "Meet in public places, verify identity through trusted routes, share plans with trusted friends, and report concerns quickly.");
+}
+
+function showSafetyModal({ title, body, placeholder, action, type }) {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  const inputTag = type === "block"
+    ? `<input id="safetyActionInput" class="modal-input" placeholder="${placeholder}" />`
+    : `<textarea id="safetyActionInput" placeholder="${placeholder}"></textarea>`;
+  dialog.innerHTML = `
+    <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="${title}">
+      <h2>${title}</h2>
+      <p>${body}</p>
+      ${inputTag}
+      <small id="safetyActionError" class="modal-error" aria-live="polite"></small>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-submit-safety-action="${type}">${action}</button></div>
+    </div>
+  `;
+  document.body.append(dialog);
+}
+
+function submitSafetyAction(type) {
+  const input = document.querySelector("#safetyActionInput");
+  const error = document.querySelector("#safetyActionError");
+  const value = input?.value.trim() || "";
+  if (!value) {
+    if (error) error.textContent = "Add a little detail to continue.";
+    return;
+  }
+  if (type === "report") {
+    settingsState.reportHistory.unshift(`User report · ${value.slice(0, 42)}`);
+    document.querySelector(".discard-dialog")?.remove();
+    syncSettingsRows();
+    persistPrototypeState();
+    showUtilityFeedback("Report submitted", "Your report was recorded locally for prototype testing.");
+    return;
+  }
+  if (type === "block") {
+    if (!settingsState.blockedUsers.includes(value)) settingsState.blockedUsers.unshift(value);
+    document.querySelector(".discard-dialog")?.remove();
+    syncSettingsRows();
+    persistPrototypeState();
+    showUtilityFeedback("User blocked", `${value} has been added to blocked users.`);
+    return;
+  }
+  if (type === "contact") {
+    settingsState.reportHistory.unshift(`Support note · ${value.slice(0, 42)}`);
+    document.querySelector(".discard-dialog")?.remove();
+    syncSettingsRows();
+    persistPrototypeState();
+    showUtilityFeedback("Message sent", "Your note was saved locally for prototype testing.");
+  }
+}
+
+function openFeedbackForm() {
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card feedback-card" role="dialog" aria-modal="true" aria-label="Send feedback">
+      <h2>Send Feedback</h2>
+      <p>This helps make 6dgrs clearer for friends and family testers.</p>
+      <label>What confused you?<textarea data-feedback-field="confused" placeholder="Anything unclear?"></textarea></label>
+      <label>What did you like?<textarea data-feedback-field="liked" placeholder="What felt useful or polished?"></textarea></label>
+      <label>What felt broken?<textarea data-feedback-field="broken" placeholder="Buttons, pages, wording, layout..."></textarea></label>
+      <label>Would you use this?<select data-feedback-field="wouldUse"><option>Yes</option><option>Maybe</option><option>No</option></select></label>
+      <label>Any other notes?<textarea data-feedback-field="notes" placeholder="Anything else testers should tell us?"></textarea></label>
+      <small id="feedbackError" class="modal-error" aria-live="polite"></small>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-submit-feedback>Save Feedback</button></div>
+    </div>
+  `;
+  document.body.append(dialog);
+}
+
+function submitFeedback() {
+  const fields = [...document.querySelectorAll("[data-feedback-field]")];
+  const feedback = fields.reduce((item, field) => {
+    item[field.dataset.feedbackField] = field.value.trim();
+    return item;
+  }, { createdAt: new Date().toISOString() });
+  const hasText = ["confused", "liked", "broken", "notes"].some((key) => feedback[key]);
+  if (!hasText) {
+    const error = document.querySelector("#feedbackError");
+    if (error) error.textContent = "Add at least one note to save feedback.";
+    return;
+  }
+  appState.feedback = Array.isArray(appState.feedback) ? appState.feedback : [];
+  appState.feedback.unshift(feedback);
+  persistPrototypeState();
+  document.querySelector(".discard-dialog")?.remove();
+  showUtilityFeedback("Thank you", "Your feedback was saved locally in this prototype.");
 }
 
 function navigateBackFrom(current) {
@@ -1416,11 +2061,37 @@ function renderInstagramAccess() {
 }
 
 function selectedProfile() {
-  return personProfiles[selectedProfileName] || personProfiles["Emma Laurent"];
+  return personProfiles[selectedProfileName] || {
+    name: selectedProfileName || "Unavailable profile",
+    initials: "?",
+    city: "Unavailable",
+    homeCity: "",
+    relationship: "Unavailable",
+    path: "No active trust path",
+    directRelationship: "",
+    action: "Unavailable",
+    bio: "This profile cannot be loaded right now. It may have been removed, archived, or outside your current trust path.",
+    interests: ["Unavailable"],
+    stats: "No profile data available",
+    vouches: [],
+    instagram: "",
+    trips: [],
+    plans: { hosting: [], attending: [], past: [] },
+    unavailable: true
+  };
 }
 
 function nameKey(name = "") {
   return name.split(" ")[0].toLowerCase();
+}
+
+function normalizeTrustPath(path = "") {
+  return String(path || "").replaceAll("→", "->").replace(/\s+via\s+/gi, " -> ");
+}
+
+function canonicalPersonName(name = "") {
+  if (!name || name === "You" || name === "Hugo") return name;
+  return profileForName(name)?.name || name;
 }
 
 function isRemovedName(name = "") {
@@ -1429,7 +2100,56 @@ function isRemovedName(name = "") {
 }
 
 function pathParts(path = "") {
-  return path.includes("->") ? path.split("->").map((part) => part.trim()).filter(Boolean) : [];
+  const normalized = normalizeTrustPath(path);
+  return normalized.includes("->") ? normalized.split("->").map((part) => part.trim()).filter(Boolean) : [];
+}
+
+function graphList(key) {
+  if (!Array.isArray(appState[key])) appState[key] = [];
+  return appState[key];
+}
+
+function hasGraphFlag(key, name = "") {
+  const normalized = nameKey(canonicalPersonName(name));
+  return graphList(key).some((item) => nameKey(canonicalPersonName(item)) === normalized);
+}
+
+function addGraphFlag(key, name = "") {
+  const canonical = canonicalPersonName(name);
+  if (!canonical || canonical === "You" || canonical === "Hugo") return;
+  const list = graphList(key);
+  if (!hasGraphFlag(key, canonical)) list.unshift(canonical);
+}
+
+function removeGraphFlag(key, name = "") {
+  const normalized = nameKey(canonicalPersonName(name));
+  appState[key] = graphList(key).filter((item) => nameKey(canonicalPersonName(item)) !== normalized);
+}
+
+function isMetConnection(name = "") {
+  const profile = profileForName(name);
+  return Boolean(
+    profile?.directRelationship === "Met" ||
+    hasGraphFlag("metConnections", name) ||
+    (Array.isArray(appState.confirmedMeetups) && appState.confirmedMeetups.some((meetup) => nameKey(meetup.person) === nameKey(name)))
+  );
+}
+
+function directTrustedNames() {
+  const profileTrusted = Object.values(personProfiles)
+    .filter((profile) => profile.directRelationship === "Trusted Friend" || hasGraphFlag("trustedConnections", profile.name))
+    .map((profile) => profile.name);
+  return [...new Set([...profileTrusted, ...graphList("trustedConnections")])]
+    .filter((name) => name && !isRemovedName(name));
+}
+
+function isTrustedConnection(name = "") {
+  const key = nameKey(name);
+  return directTrustedNames().some((trustedName) => nameKey(trustedName) === key);
+}
+
+function isVouchedConnection(name = "") {
+  return hasGraphFlag("vouchedConnections", name) || Boolean(profileForName(name)?.vouches?.length);
 }
 
 function pathDependsOnRemoved(path = "", targetName = "") {
@@ -1438,12 +2158,28 @@ function pathDependsOnRemoved(path = "", targetName = "") {
   return parts.slice(1, -1).some((part) => isRemovedName(part)) || (targetKey && isRemovedName(targetKey));
 }
 
+function pathFirstHopIsTrusted(path = "") {
+  const parts = pathParts(path);
+  if (parts.length < 2) return false;
+  const firstHop = parts[1];
+  return firstHop === "You" || firstHop === "Hugo" || isTrustedConnection(firstHop);
+}
+
+function isActiveTrustPath(path = "", targetName = "") {
+  const parts = pathParts(path);
+  if (!parts.length) return false;
+  const target = targetName || parts.at(-1);
+  if (isRemovedName(target)) return false;
+  if (isTrustedConnection(target) || isMetConnection(target)) return true;
+  return parts.length >= 3 && pathFirstHopIsTrusted(path) && !pathDependsOnRemoved(path, target);
+}
+
 function activePath(paths = [], targetName = "") {
-  return paths.find((path) => !pathDependsOnRemoved(path, targetName));
+  return paths.find((path) => isActiveTrustPath(path, targetName));
 }
 
 function archivedPath(paths = [], targetName = "") {
-  return paths.find((path) => pathDependsOnRemoved(path, targetName)) || paths[0] || "";
+  return paths.find((path) => !isActiveTrustPath(path, targetName)) || paths[0] || "";
 }
 
 function viaName(path = "") {
@@ -1451,9 +2187,15 @@ function viaName(path = "") {
   return parts.length > 2 ? parts[1] : "";
 }
 
+function displayTrustPath(path = "") {
+  return pathParts(path).join(" → ") || path;
+}
+
 function connectionStateForProfile(profile) {
-  const paths = profile.paths || (profile.path?.includes("->") ? [profile.path] : []);
-  const directRelationship = profile.directRelationship || (["Trusted Friend", "Met"].includes(profile.relationship) ? profile.relationship : "");
+  const paths = profile.paths || (pathParts(profile.path).length ? [profile.path] : []);
+  const isTrusted = isTrustedConnection(profile.name);
+  const isMet = !isTrusted && isMetConnection(profile.name);
+  const directRelationship = isTrusted ? "Trusted Friend" : isMet ? "Met" : (profile.directRelationship || (["Trusted Friend", "Met"].includes(profile.relationship) ? profile.relationship : ""));
   const removedSelf = isRemovedName(profile.name);
   const livePath = activePath(paths, profile.name);
   const oldPath = archivedPath(paths, profile.name);
@@ -1475,7 +2217,7 @@ function connectionStateForProfile(profile) {
     return {
       state: "direct",
       relationship: directRelationship,
-      path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · network remains locked",
+      path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · wider network stays locked until Trusted Friend",
       canRemove: true,
       removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
       locked: false,
@@ -1487,7 +2229,7 @@ function connectionStateForProfile(profile) {
     return {
       state: "active-path",
       relationship: via ? `Connected via ${via}` : profile.relationship,
-      path: livePath,
+      path: displayTrustPath(livePath),
       canRemove: true,
       removeLabel: "Remove from Network",
       locked: false,
@@ -1501,7 +2243,7 @@ function connectionStateForProfile(profile) {
     canRemove: false,
     removeLabel: "",
     archived: true,
-    locked: false,
+    locked: true,
     action: "Request Reconnection"
   };
 }
@@ -1509,18 +2251,69 @@ function connectionStateForProfile(profile) {
 function connectionStateForPerson(person) {
   const profile = personProfiles[person.name];
   if (profile) return connectionStateForProfile(profile);
-  const paths = person.path?.includes("->") ? [person.path] : [];
+  const paths = pathParts(person.path).length ? [person.path] : [];
+  if (isTrustedConnection(person.name)) {
+    return {
+      state: "direct",
+      relationship: "Trusted Friend",
+      path: "Direct trusted connection",
+      locked: false,
+      action: "Message"
+    };
+  }
+  if (isMetConnection(person.name) || person.met) {
+    return {
+      state: "met",
+      relationship: "Met",
+      path: "Met in person · network remains locked until Trusted Friend",
+      locked: false,
+      action: "Request Trusted Connection"
+    };
+  }
   if (paths.length && !activePath(paths, person.name)) {
     const oldPath = archivedPath(paths, person.name);
     return {
       relationship: "Archived Path",
       path: `Previously connected${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""} · No active trust path`,
       archived: true,
-      locked: false,
+      locked: true,
       action: "Request Reconnection"
     };
   }
+  if (paths.length) {
+    const livePath = activePath(paths, person.name);
+    const via = viaName(livePath);
+    return {
+      relationship: via ? `Connected via ${via}` : person.badge,
+      path: displayTrustPath(livePath),
+      archived: false,
+      locked: false,
+      action: person.cta || "Request Intro"
+    };
+  }
   return null;
+}
+
+function refreshTrustGraphViews() {
+  renderProfile();
+  renderHomePeople();
+  renderHomePlans();
+  renderHomeSuggestions();
+  renderSuggestedConnectionsPage();
+  renderNearbyPeoplePage();
+  renderNetworkMovement();
+  renderNetworkLists();
+  renderCityMutuals(document.querySelector("#cityMutualTitle")?.textContent || "Barcelona");
+  renderCityHub(document.querySelector(".city-node.active")?.dataset.city || "Oslo");
+  renderTrustedPlans();
+  renderMyPlans();
+  renderPersonPlans();
+  renderConnectionRequests();
+  renderPlanRequests();
+  renderChats();
+  renderPlanDetail();
+  renderTrustCaps();
+  persistPrototypeState();
 }
 
 function allPlansFlat() {
@@ -1531,7 +2324,7 @@ function allPlansFlat() {
   ];
 }
 
-function selectedPlan() {
+function findSelectedPlan() {
   const matches = allPlansFlat().filter((plan) => plan.name === selectedPlanName);
   const roleMatch = matches.find((plan) => {
     if (selectedPlanStatus === "hosting") return plan.role === "hosting" || plan.mine;
@@ -1541,7 +2334,25 @@ function selectedPlan() {
     if (selectedPlanStatus === "discoverable") return plan.viewerStatus === "discoverable" && !plan.mine;
     return false;
   });
-  return roleMatch || matches.find((plan) => plan.role || plan.viewerStatus) || matches[0] || discoverablePlans[0] || myPlans.hosting[0];
+  return roleMatch || matches.find((plan) => plan.role || plan.viewerStatus) || matches[0];
+}
+
+function fallbackPlan() {
+  return {
+    name: selectedPlanName || "Plan unavailable",
+    host: "Unavailable",
+    path: "No active plan data",
+    time: "Unavailable",
+    location: "Unavailable",
+    joined: 0,
+    max: 0,
+    visibility: "Unavailable",
+    unavailable: true
+  };
+}
+
+function selectedPlan() {
+  return findSelectedPlan() || discoverablePlans[0] || myPlans.hosting[0] || fallbackPlan();
 }
 
 function planStatusForName(name) {
@@ -1561,6 +2372,19 @@ function renderProfile() {
   const profile = selectedProfile();
   const root = document.querySelector("#profile .scroll-area");
   if (!root) return;
+  if (profile.unavailable) {
+    root.innerHTML = `
+      <div class="cover"></div>
+      <section class="profile-head">
+        <div class="profile-avatar">${profile.initials}</div>
+        <h1>${profile.name}</h1>
+        <span class="trust-badge relationship-badge">Unavailable</span>
+        <p>${profile.path}</p>
+      </section>
+      <section class="content-section">${unavailableState("Profile cannot be loaded", profile.bio)}</section>
+    `;
+    return;
+  }
   const connectionState = connectionStateForProfile(profile);
   const upcomingTrips = profile.trips.filter((trip) => trip.status !== "past").slice(0, 2);
   const allPlans = [...(profile.plans.hosting || []), ...(profile.plans.attending || []), ...(profile.plans.past || [])];
@@ -1568,9 +2392,12 @@ function renderProfile() {
   const pastPlans = allPlans.filter((plan) => plan.role === "past").length;
   const actionLabel = connectionState.action || (profile.relationship === "Trusted Friend" ? "Message" : profile.relationship === "Met" ? "Request Trusted Connection" : "Request Intro");
   const actionTarget = actionLabel === "Message" ? "chat-detail" : "request-intro";
+  const chatTypeAttr = actionLabel === "Message"
+    ? ` data-chat-type="${profile.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat"}" data-chat-name="${profile.name}" data-chat-path="${connectionState.path}" data-chat-preview="Message ${profile.name.split(" ")[0]} directly."`
+    : "";
   const primaryAction = connectionState.archived
     ? `<button type="button" data-request-reconnect="${profile.name}">Request Reconnection</button>`
-    : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"`}>${actionLabel}</button>`;
+    : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"${chatTypeAttr}`}>${actionLabel}</button>`;
   root.innerHTML = `
     <div class="cover"></div>
     <section class="profile-head">
@@ -1639,8 +2466,8 @@ function personCard(person, index = 0) {
   const hasProfile = Boolean(personProfiles[person.name]);
   const action = isArchived ? "Request Reconnection" : isLocked ? "Locked" : cardCta;
   const isHomeDiscovery = ["home", "nearby-people"].includes(activeScreenId());
-  const pathParts = (person.path || "").split("->").map((part) => part.trim());
-  const mutualName = pathParts.length > 2 ? pathParts[1] : "";
+  const parts = pathParts(person.path || "");
+  const mutualName = parts.length > 2 ? parts[1] : "";
   const relationship = pathState?.relationship || (person.badge === "Living here" ? "Lives Here"
     : person.badge === "Trusted local" ? "Local Host"
       : person.degree === 2 && mutualName ? `Mutual via ${mutualName}`
@@ -1678,12 +2505,13 @@ function personCard(person, index = 0) {
 function chatCard(chat, index, mode = "default") {
   const action = mode === "share" ? `<button class="share-contact" data-share-contact="${chat.name}">Share</button>` : "";
   const normalizedType = (chat.chatType || "").replaceAll("-", "_");
+  const isArchivedChat = Boolean(chat.archived || pathDependsOnRemoved(chat.path, chat.name));
   const isPlanChat = chat.screen === "plan-chat" || normalizedType === "plan_chat" || normalizedType === "archived_plan_chat";
   const destination = isPlanChat ? "plan-chat" : (chat.screen || "chat-detail");
-  const planStatus = normalizedType === "archived_plan_chat" ? "past" : (chat.planStatus || planStatusForName(chat.name));
+  const planStatus = normalizedType === "archived_plan_chat" || isArchivedChat && isPlanChat ? "past" : (chat.planStatus || planStatusForName(chat.name));
   const planAttrs = isPlanChat ? ` data-plan-name="${chat.name}" data-plan-status="${planStatus}"` : "";
   const detailAttrs = !isPlanChat && normalizedType
-    ? ` data-chat-type="${normalizedType}" data-chat-role="${chat.userRole || ""}" data-chat-path="${chat.path}" data-chat-preview="${chat.preview}"`
+    ? ` data-chat-type="${normalizedType}" data-chat-role="${chat.userRole || ""}" data-chat-path="${chat.path}" data-chat-preview="${chat.preview}"${isArchivedChat ? ` data-chat-archived="true"` : ""}`
     : "";
   const hasPathRoute = chat.path.includes("->") || chat.path.includes("→");
   const chatType = chat.type || (isPlanChat ? (planStatus === "past" ? "Archived Plan Chat" : "Private Plan Chat") : chat.trusted ? "Trusted Friend Chat" : hasPathRoute ? "Direct Connection Chat" : "1:1 Chat");
@@ -1694,7 +2522,9 @@ function chatCard(chat, index, mode = "default") {
       <button class="text-mini" type="button" data-intro-soft-decline>Not right now</button>
     </div>
   ` : "";
-  const context = isPlanChat
+  const context = isArchivedChat
+    ? "Archived conversation · history preserved."
+    : isPlanChat
     ? "Hosted by Amara · 4 attendees · Accepted"
     : chat.introRequest || chatType === "Intro Chat"
       ? ""
@@ -1704,16 +2534,16 @@ function chatCard(chat, index, mode = "default") {
         ? (chatType === "Intro Chat" ? "" : "Visible through a mutual introduction path.")
         : chat.preview;
   return `
-    <article class="chat-card ${mode === "share" ? "share-mode" : ""} ${chat.introRequest ? "intro-request-card" : ""}" ${mode === "share" ? "" : `data-next="${destination}"${planAttrs}${detailAttrs}`} data-chat-name="${chat.name}">
+    <article class="chat-card ${mode === "share" ? "share-mode" : ""} ${chat.introRequest ? "intro-request-card" : ""} ${chat.muted ? "is-muted" : ""} ${isArchivedChat ? "archived-chat-card" : ""}" ${mode === "share" || chat.introRequest && !isArchivedChat ? "" : `data-next="${destination}"${planAttrs}${detailAttrs}`} data-chat-name="${chat.name}">
       <div class="avatar online" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
       <div>
         <div class="meta"><h3>${chat.name}</h3><p>${chat.time}</p></div>
-        <span class="trust-badge relationship-badge">${chatType}</span><span class="muted-indicator" hidden aria-label="Muted"></span>
+        <span class="trust-badge relationship-badge">${chatType}</span><span class="muted-indicator" ${chat.muted ? "" : "hidden"} aria-label="Muted"></span>
         <p>${chat.preview}</p>
         ${context ? `<small class="context-copy">${context}</small>` : ""}
         ${introActions}
       </div>
-      ${mode === "share" ? "" : `<div class="chat-card-utilities"><button class="chat-icon-button chat-mute-icon" type="button" data-chat-mute aria-label="Mute chat"></button><button class="chat-icon-button chat-archive-icon" type="button" data-chat-archive aria-label="Archive chat"></button></div>`}
+      ${mode === "share" ? "" : `<div class="chat-card-utilities">${isArchivedChat ? `<button class="chat-icon-button chat-unarchive-icon" type="button" data-chat-unarchive aria-label="Restore archived chat"></button><button class="chat-icon-button chat-delete-archived-icon" type="button" data-chat-delete-archived aria-label="Delete archived chat permanently"></button>` : `<button class="chat-icon-button chat-mute-icon" type="button" data-chat-mute aria-label="Mute chat"></button><button class="chat-icon-button chat-archive-icon" type="button" data-chat-archive aria-label="Archive chat"></button>`}</div>`}
       ${action}
     </article>
   `;
@@ -1745,6 +2575,7 @@ function planShareComposer() {
 
 function planCard(plan, index = 0, compact = false) {
   const max = Math.min(plan.max, 6);
+  const trustState = planTrustState(plan);
   const isHosting = plan.role === "hosting" || plan.mine;
   const isAttending = plan.role === "attending";
   const isPending = plan.role === "pending" || plan.viewerStatus === "pending";
@@ -1757,6 +2588,8 @@ function planCard(plan, index = 0, compact = false) {
         ? "Pending Approval"
         : isPast
           ? "View Chat History"
+          : trustState.locked
+            ? "Locked Path"
           : "Request to Join";
   const actionTarget = isHosting ? "edit-plan" : (isAttending || plan.viewerStatus === "accepted" || isPast) ? "plan-chat" : "plan-detail";
   const spotsLeft = Math.max(0, max - plan.joined);
@@ -1764,6 +2597,7 @@ function planCard(plan, index = 0, compact = false) {
     : isAttending || plan.viewerStatus === "accepted" ? "Attending"
       : isPending ? "Pending Approval"
         : isPast ? "Past Meetup"
+          : trustState.locked ? "Locked Path"
           : spotsLeft === 0 ? "Full" : "Open to Join";
   const spotBadge = spotsLeft === 0 ? "Full" : `${spotsLeft} Spot${spotsLeft === 1 ? "" : "s"} Left`;
   const visibilityBadge = plan.visibility.includes("Invite") ? "Invite Only"
@@ -1778,9 +2612,11 @@ function planCard(plan, index = 0, compact = false) {
         ? "You requested to join - awaiting host approval."
         : isPast
           ? "This plan has ended - archived chat is read only."
+          : trustState.locked
+            ? trustState.note
           : `Open to ${plan.visibility.toLowerCase()} visiting ${plan.location}.`;
   return `
-    <article class="plan-card ${compact ? "compact" : ""} ${isPast ? "past-plan-card" : ""}">
+    <article class="plan-card ${compact ? "compact" : ""} ${isPast ? "past-plan-card" : ""} ${trustState.locked ? "locked-relation" : ""}">
       <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
       <div>
         <h3>${plan.name}</h3>
@@ -1790,7 +2626,7 @@ function planCard(plan, index = 0, compact = false) {
         <div class="plan-meta"><span>${plan.joined}/${max}</span><span>${spotBadge}</span><span>${visibilityBadge}</span></div>
         <small class="context-copy">${planContext}</small>
       </div>
-      <button data-next="${actionTarget}" data-plan-name="${plan.name}" data-plan-status="${plan.viewerStatus || plan.role || "discoverable"}">${actionLabel}</button>
+      <button ${trustState.locked ? "disabled" : `data-next="${actionTarget}" data-plan-name="${plan.name}" data-plan-status="${plan.viewerStatus || plan.role || "discoverable"}"`}>${actionLabel}</button>
     </article>
   `;
 }
@@ -1837,12 +2673,20 @@ function myPlanCard(plan, index = 0) {
 }
 
 function renderEditPlan() {
-  const plan = selectedPlan();
+  const plan = findSelectedPlan() || selectedPlan();
   const hub = document.querySelector("#edit-plan .plan-management-hub");
   const formLabels = document.querySelectorAll("#edit-plan .form-card > label");
   const titleInput = formLabels[0]?.querySelector("input");
   const locationInput = formLabels[1]?.querySelector("input");
   const chatButton = document.querySelector("#edit-plan .chat-cta");
+  if (plan.unavailable) {
+    if (hub) {
+      hub.querySelector("strong").textContent = "Plan unavailable";
+      hub.querySelector("span").textContent = "This plan cannot be edited right now.";
+    }
+    if (chatButton) chatButton.disabled = true;
+    return;
+  }
   if (hub) {
     hub.querySelector("strong").textContent = plan.name;
     hub.querySelector("span").textContent = `${plan.time} · ${plan.location}`;
@@ -1861,8 +2705,43 @@ function renderEditPlan() {
   }
 }
 
+function saveEditedPlan() {
+  const plan = findSelectedPlan();
+  if (!plan) {
+    showUtilityFeedback("Plan unavailable", "This plan could not be saved because it is no longer available.");
+    return false;
+  }
+  const screen = document.querySelector("#edit-plan");
+  const labels = [...(screen?.querySelectorAll(".form-card > label, .form-grid label") || [])];
+  const title = labels[0]?.querySelector("input")?.value.trim();
+  const date = labels[1]?.querySelector("input")?.value;
+  const time = labels[2]?.querySelector("input")?.value;
+  const location = labels[3]?.querySelector("input")?.value.trim();
+  const description = labels[4]?.querySelector("textarea")?.value.trim();
+  const max = Number.parseInt(labels[5]?.querySelector("select")?.value, 10);
+  const visibility = labels[6]?.querySelector("select")?.value;
+  const oldName = plan.name;
+  if (title) plan.name = title;
+  if (location) plan.location = location;
+  if (description) plan.description = description;
+  if (Number.isFinite(max)) plan.max = Math.min(max, 6);
+  if (visibility) plan.visibility = visibility;
+  if (date || time) {
+    const day = date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" }) : (plan.time.split(",")[0] || "Soon");
+    plan.time = `${day}, ${time || plan.time.split(", ")[1] || "TBC"}`;
+  }
+  selectedPlanName = plan.name;
+  if (oldName !== plan.name) {
+    allPlansFlat().forEach((item) => {
+      if (item !== plan && item.name === oldName && item.role === plan.role) Object.assign(item, plan);
+    });
+  }
+  persistPrototypeState();
+  return true;
+}
+
 function renderPlanChat() {
-  const plan = selectedPlan();
+  const plan = findSelectedPlan() || selectedPlan();
   const isArchived = selectedPlanStatus === "past";
   const isHost = selectedPlanStatus === "hosting" || plan.host === "You";
   const isGuest = selectedPlanStatus === "accepted" && !isHost;
@@ -1874,6 +2753,22 @@ function renderPlanChat() {
   const strip = document.querySelector("#plan-chat .participant-strip");
   const reminder = document.querySelector("#plan-chat .plan-reminder");
   const messages = document.querySelector("#plan-chat .plan-messages");
+  if (plan.unavailable) {
+    if (title) title.textContent = "Plan unavailable";
+    if (sub) sub.textContent = "This plan could not be loaded";
+    if (status) status.innerHTML = `<span class="trust-badge relationship-badge">Unavailable</span><small>No active plan chat data</small>`;
+    if (quickActions) {
+      quickActions.hidden = true;
+      quickActions.innerHTML = "";
+    }
+    if (strip) strip.innerHTML = "";
+    if (messages) messages.innerHTML = unavailableState("Chat unavailable", "This plan chat may have been removed, archived, or reset.");
+    if (composer) {
+      composer.classList.add("archived");
+      composer.innerHTML = `<div class="archived-status-bar">Chat unavailable</div>`;
+    }
+    return;
+  }
   const hostLabel = plan.host === "You" ? "Hugo" : plan.host;
   const hostFirst = hostLabel;
   const participants = [hostFirst, "Laura", "Theo", plan.host === "You" ? "Amara" : "Hugo"];
@@ -1947,23 +2842,31 @@ function renderHomePlans() {
     plan.role !== "attending" &&
     plan.role !== "pending" &&
     plan.viewerStatus === "discoverable" &&
-    plan.joined < Math.min(plan.max, 6)
+    plan.joined < Math.min(plan.max, 6) &&
+    planTrustState(plan).active
   ));
   list.innerHTML = plans.length
     ? plans.slice(0, 4).map(homePlanCard).join("")
-    : `<div class="empty-card">No trusted plans match this view yet.</div>`;
+    : emptyState("No trusted plans nearby", "Small plans from trusted paths will appear here when they match your city or trips.", `<button type="button" class="soft-action" data-next="create-plan">Create a plan</button>`);
 }
 
 function renderTrustedPlans() {
   const list = document.querySelector("#trustedPlansList");
   if (!list) return;
-  list.innerHTML = discoverablePlans.map((plan, index) => planCard(plan, index)).join("");
+  const plans = discoverablePlans.filter((plan) => planTrustState(plan).active || planTrustState(plan).locked);
+  list.innerHTML = plans.length
+    ? plans.map((plan, index) => planCard(plan, index)).join("")
+    : emptyState("No trusted plans nearby", "Plans you can request to join will appear here as your network becomes active.", `<button type="button" class="soft-action" data-next="create-plan">Host one</button>`);
 }
 
 function renderMyPlans() {
   const list = document.querySelector("#myPlansList");
   if (!list) return;
-  list.innerHTML = (myPlans[planFilter] || []).map(myPlanCard).join("");
+  syncPlanRequestCounts();
+  const plans = myPlans[planFilter] || [];
+  list.innerHTML = plans.length
+    ? plans.map(myPlanCard).join("")
+    : emptyState(`No ${planFilter} plans`, "Plans in this state will appear here as you host, join, request, or complete plans.", `<button type="button" class="soft-action" data-next="create-plan">Create plan</button>`);
 }
 
 function renderPersonPlans() {
@@ -1973,7 +2876,7 @@ function renderPersonPlans() {
   document.querySelector("#person-plans h1").textContent = `${profile.name}'s Plans`;
   document.querySelector("#person-plans .network-header p").textContent = `Plans ${profile.name.split(" ")[0]} is hosting, attending, or has completed.`;
   const plans = profile.plans[planFilter] || profile.plans.hosting || [];
-  list.innerHTML = plans.length ? plans.map(personPlanCard).join("") : `<div class="empty-card">No visible plans.</div>`;
+  list.innerHTML = plans.length ? plans.map(personPlanCard).join("") : emptyState("No visible plans", "Plans this person shares with your trust level will appear here.");
 }
 
 function personPlanCard(plan, index = 0) {
@@ -2014,13 +2917,27 @@ function personPlanCard(plan, index = 0) {
 
 function renderPlanDetail() {
   const status = selectedPlanStatus;
-  const plan = selectedPlan();
+  const plan = findSelectedPlan() || selectedPlan();
   const actionGrid = document.querySelector("#planDetailActions");
   const joinNote = document.querySelector("#planJoinNote");
   const attendees = document.querySelector("#planAttendees");
   const heroBadge = document.querySelector("#planDetailBadge");
   const hero = document.querySelector("#plan-detail .plan-hero");
   const requestsButton = document.querySelector("#planDetailRequests");
+  if (plan.unavailable) {
+    if (hero) {
+      hero.querySelector("h1").textContent = "Plan unavailable";
+      hero.querySelector("p").textContent = "This plan may have been removed, archived, or reset.";
+      hero.querySelector(".host-line strong").textContent = "No active plan";
+      hero.querySelector(".host-line span").textContent = "Try returning to plans and opening it again.";
+    }
+    if (heroBadge) heroBadge.textContent = "Unavailable";
+    if (requestsButton) requestsButton.hidden = true;
+    if (joinNote) joinNote.hidden = true;
+    if (attendees) attendees.hidden = true;
+    if (actionGrid) actionGrid.innerHTML = unavailableState("Plan no longer exists", "The plan could not be loaded from the current prototype state.");
+    return;
+  }
   if (hero) {
     hero.querySelector("h1").textContent = plan.name;
     hero.querySelector("p").textContent = `${plan.time} · ${plan.location}`;
@@ -2086,19 +3003,24 @@ function tripsSections(trips, options = {}) {
     .filter(isPastTrip)
     .sort((a, b) => new Date(b.start) - new Date(a.start));
   return `
-    <section class="content-section"><h2>Upcoming Trips</h2><div class="people-stack upcoming-trip-list">${upcoming.length ? upcoming.map((trip) => tripCard(trip, manageable)).join("") : `<div class="empty-card">No visible upcoming trips.</div>`}</div></section>
-    <section class="content-section"><h2>Past Trips</h2><div class="past-trips-carousel">${past.length ? past.map((trip) => pastTripCard(trip, manageable)).join("") : `<div class="empty-card">No past trips visible.</div>`}</div></section>
+    <section class="content-section"><h2>Upcoming Trips</h2><div class="people-stack upcoming-trip-list">${upcoming.length ? upcoming.map((trip) => tripCard(trip, manageable)).join("") : emptyState("No upcoming trips", "Add a trip to unlock city overlaps and trusted introductions.", manageable ? `<button type="button" class="soft-action" data-next="trip">Add trip</button>` : "")}</div></section>
+    <section class="content-section"><h2>Past Trips</h2><div class="past-trips-carousel">${past.length ? past.map((trip) => pastTripCard(trip, manageable)).join("") : emptyState("No past trips yet", "Completed trips will move here as your travel history grows.")}</div></section>
   `;
 }
 
 function requestCard(request, index = 0, group = requestFilter) {
   const status = (request.status || "").toLowerCase();
+  const trustState = connectionStateForPerson({ name: request.name, path: request.path, badge: request.type, cta: "Request Intro" });
+  const pathLocked = Boolean(trustState?.locked);
+  const reconnectTarget = viaName(archivedPath(pathParts(request.path).length ? [request.path] : [], request.name)) || request.name;
   const isNew = request.actions || status.includes("new") || status.includes("waiting for you");
   const isAccepted = status.includes("accepted") || status.includes("chat open") || status.includes("added");
   const isDeclined = status.includes("declined");
   const isWaiting = !isNew && !isAccepted && !isDeclined && (status.includes("waiting") || status.includes("sent") || status.includes("pending"));
   const profileAttr = `data-profile-name="${request.name}"`;
-  const actions = isNew
+  const actions = pathLocked
+    ? `<div class="request-actions"><button type="button" data-request-reconnect="${reconnectTarget}">Request Reconnection</button><button data-next="profile" ${profileAttr}>View Profile</button></div>`
+    : isNew
     ? `<div class="request-actions"><button type="button" data-request-response="accept" data-request-group="${group}" data-request-index="${index}">Accept</button><button type="button" data-request-response="decline" data-request-group="${group}" data-request-index="${index}">Decline</button><button data-next="profile" ${profileAttr}>View Profile</button></div>`
     : isAccepted
       ? `<div class="request-actions"><button type="button" data-message-person="${request.name}">Message</button><button data-next="profile" ${profileAttr}>View Profile</button></div>`
@@ -2107,7 +3029,9 @@ function requestCard(request, index = 0, group = requestFilter) {
         : isWaiting
           ? `<div class="request-actions status-only"><span>Status only · ${request.status}</span></div>`
           : `<div class="request-actions"><button data-next="profile" ${profileAttr}>View Profile</button></div>`;
-  const requestContext = request.type.includes("Intro")
+  const requestContext = pathLocked
+    ? "This request depends on an archived trust path. Reconnect before continuing."
+    : request.type.includes("Intro")
     ? "Visible through a mutual path - decide whether to continue the introduction."
     : request.type.includes("Trusted Friend")
       ? "Met in person - can become trusted only after mutual acceptance."
@@ -2120,7 +3044,7 @@ function requestCard(request, index = 0, group = requestFilter) {
       <div>
         <h3>${request.name}</h3>
         <p>${request.path}</p>
-        <span class="trust-badge">${request.type} · ${request.status}</span>
+        <span class="trust-badge">${pathLocked ? "Archived Path · Locked" : `${request.type} · ${request.status}`}</span>
         <small class="context-copy">${requestContext}</small>
       </div>
       ${actions}
@@ -2131,24 +3055,38 @@ function requestCard(request, index = 0, group = requestFilter) {
 function renderConnectionRequests() {
   const list = document.querySelector("#connectionRequestList");
   if (!list) return;
-  list.innerHTML = (connectionRequests[requestFilter] || []).map((request, index) => requestCard(request, index, requestFilter)).join("");
+  const requests = connectionRequests[requestFilter] || [];
+  const labels = {
+    intro: ["No intro requests", "Warm intro requests from your trusted network will appear here."],
+    met: ["No met upgrades", "People you have met can request trusted upgrades here."],
+    sent: ["No sent requests", "Intro and trusted requests you send will be tracked here."],
+    meetups: ["No pending meetups", "Meetups needing verification will appear here."]
+  };
+  const [title, body] = labels[requestFilter] || ["No requests", "Requests will appear here when there is something to review."];
+  list.innerHTML = requests.length ? requests.map((request, index) => requestCard(request, index, requestFilter)).join("") : emptyState(title, body);
 }
 
 function renderPlanRequests() {
   const list = document.querySelector("#planRequestsList");
   if (!list) return;
-  list.innerHTML = planJoinRequests.map((request, index) => `
-    <article class="request-card plan-request">
-      <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
-      <div>
-        <h3>${request.name}</h3>
-        <p>${request.path}</p>
-        <span class="trust-badge">${request.vouch}</span>
-        <p>${request.message}</p>
-      </div>
-      <div class="request-actions"><button type="button" data-plan-request-response="accept" data-plan-request-index="${index}">Accept</button><button type="button" data-plan-request-response="reject" data-plan-request-index="${index}">Reject</button><button data-next="profile" data-profile-name="${request.name}">View Profile</button></div>
-    </article>
-  `).join("");
+  syncPlanRequestCounts();
+  list.innerHTML = planJoinRequests.map((request, index) => {
+    const trustState = connectionStateForPerson({ name: request.name, path: request.path, badge: request.vouch });
+    const locked = Boolean(trustState?.locked);
+    const reconnectTarget = viaName(archivedPath(pathParts(request.path).length ? [request.path] : [], request.name)) || request.name;
+    return `
+      <article class="request-card plan-request ${locked ? "locked-relation" : ""}">
+        <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
+        <div>
+          <h3>${request.name}</h3>
+          <p>${locked ? trustState.path : request.path}</p>
+          <span class="trust-badge">${locked ? "Archived Path · Locked" : request.vouch}</span>
+          <p>${locked ? "This join request no longer has an active trust path." : request.message}</p>
+        </div>
+        <div class="request-actions">${locked ? `<button type="button" data-request-reconnect="${reconnectTarget}">Request Reconnection</button><button data-next="profile" data-profile-name="${request.name}">View Profile</button>` : `<button type="button" data-plan-request-response="accept" data-plan-request-index="${index}">Accept</button><button type="button" data-plan-request-response="reject" data-plan-request-index="${index}">Reject</button><button data-next="profile" data-profile-name="${request.name}">View Profile</button>`}</div>
+      </article>
+    `;
+  }).join("") || emptyState("No plan requests", "Join requests will appear here before people enter the plan chat.");
 }
 
 function networkPersonMatches(person, group, query) {
@@ -2165,6 +3103,7 @@ function networkPersonMatches(person, group, query) {
 
 function renderNetworkLists() {
   const query = document.querySelector("#networkSearch")?.value.trim().toLowerCase() || "";
+  let totalVisible = 0;
   const groups = [
     { key: "trusted", selector: ".network-cards", people: networkPeople },
     { key: "met", selector: ".met-cards", people: metPeople },
@@ -2176,9 +3115,19 @@ function renderNetworkLists() {
     if (!target) return;
     const section = target.closest(".content-section");
     const people = group.people.filter((person) => networkPersonMatches(person, group.key, query));
+    totalVisible += people.length;
     if (section) section.hidden = !people.length;
     target.innerHTML = people.map(personCard).join("");
   });
+  if (!totalVisible) {
+    const fallback = document.querySelector(".network-cards");
+    const section = fallback?.closest(".content-section");
+    if (section) {
+      section.hidden = false;
+      section.querySelector("h2").textContent = "Network results";
+    }
+    if (fallback) fallback.innerHTML = emptyState("No network results", "Try another search, switch filters, or add trusted people to expand your graph.", `<button type="button" class="soft-action" data-add-friends>Add trusted</button>`);
+  }
 }
 
 function getSearchResults() {
@@ -2251,7 +3200,7 @@ function renderHomePeople() {
   }
   nearby.innerHTML = results.length
     ? results.slice(0, 3).map(personCard).join("")
-    : `<div class="empty-card">No trusted matches yet. Try another city or switch filters.</div>`;
+    : emptyState("No network results", "Try another city, remove the search text, or add a trusted connection.");
 }
 
 function renderHomeSuggestions() {
@@ -2260,7 +3209,7 @@ function renderHomeSuggestions() {
   const people = suggestedConnections();
   suggested.innerHTML = people.length
     ? people.slice(0, 3).map(personCard).join("")
-    : `<div class="empty-card">No suggested introductions yet. Add a trip or trusted connection to improve matching.</div>`;
+    : emptyState("No suggested introductions yet", "Add a trip or trusted connection to improve matching.", `<button type="button" class="soft-action" data-next="trip">Add trip</button>`);
 }
 
 function renderNetworkMovement() {
@@ -2281,7 +3230,7 @@ function renderSuggestedConnectionsPage() {
   const people = suggestedConnections();
   list.innerHTML = people.length
     ? people.map(personCard).join("")
-    : `<div class="empty-card">No suggested introductions yet. Add a trip or trusted connection to improve matching.</div>`;
+    : emptyState("No suggested introductions yet", "Your strongest matches will appear here once there is enough trip or network context.", `<button type="button" class="soft-action" data-next="trip">Add trip</button>`);
 }
 
 function renderNearbyPeoplePage() {
@@ -2300,7 +3249,7 @@ function renderNearbyPeoplePage() {
   }
   list.innerHTML = results.length
     ? results.map(personCard).join("")
-    : `<div class="empty-card">No trusted matches yet. Try another city or switch filters.</div>`;
+    : emptyState("No network results", "Try another city, remove the search text, or switch filters.");
 }
 
 function renderAllTrips() {
@@ -2328,7 +3277,11 @@ function renderChats() {
   const tabs = document.querySelector("#chats .chat-tabs");
   const source = chatMode === "share"
     ? shareContacts
-    : (chats[chatFilter] || []).filter((chat) => !chat.introRequest || appState.pendingIntroRequestActive);
+    : chatFilter === "archived"
+      ? allUniqueChats().filter((chat) => chat.archived || pathDependsOnRemoved(chat.path, chat.name))
+      : (chats[chatFilter] || [])
+        .filter((chat) => !chat.archived && !pathDependsOnRemoved(chat.path, chat.name))
+        .filter((chat) => !chat.introRequest || appState.pendingIntroRequestActive);
   if (headerTitle) headerTitle.textContent = chatMode === "plan-share" ? "Share Plan" : "Chats";
   if (tabs) tabs.hidden = chatMode === "plan-share";
   if (headerCopy) {
@@ -2336,6 +3289,8 @@ function renderChats() {
       headerCopy.textContent = "Send this trusted plan to someone in your circle.";
     } else if (chatMode === "share") {
       headerCopy.textContent = "Choose a trusted contact to share Emma's profile with.";
+    } else if (chatFilter === "archived") {
+      headerCopy.textContent = "Archived conversations with relationship history preserved.";
     } else if (chatFilter === "plans") {
       headerCopy.textContent = "Trusted Plan group chats only.";
     } else {
@@ -2344,7 +3299,9 @@ function renderChats() {
   }
   list.innerHTML = chatMode === "plan-share"
     ? planShareComposer()
-    : source.map((chat, index) => chatCard(chat, index, chatMode)).join("");
+    : source.length
+      ? source.map((chat, index) => chatCard(chat, index, chatMode)).join("")
+      : emptyState(chatFilter === "archived" ? "No archived chats" : chatFilter === "plans" ? "No plan chats" : "No chats yet", chatFilter === "archived" ? "Conversations you archive will remain available here for history." : chatFilter === "plans" ? "Plan chats will appear when you host or join a plan." : "Trusted conversations, intro chats and direct messages will appear here.");
 }
 
 function renderChatDetail() {
@@ -2354,6 +3311,18 @@ function renderChatDetail() {
   const chatPath = selectedChatPath || "You → Laura → Emma";
   const chatPreview = selectedChatPreview || "Friday works. Laura vouched for you.";
   const chatProfileName = personProfiles[chatName] ? chatName : "Emma Laurent";
+
+  if (activeChatDetailMode === "archived_chat") {
+    screen.innerHTML = `
+      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>Archived conversation · history preserved</span></div></header>
+      <div class="messages">
+        <p class="bubble theirs">${chatPreview}</p>
+        <p class="bubble mine">Archived path only. Past chats, plans and meetup history remain available.</p>
+      </div>
+      <div class="archived-status-bar">Archived chat · replies closed</div>
+    `;
+    return;
+  }
 
   if (activeChatDetailMode === "intro-request" || activeChatDetailMode === "intro_request") {
     screen.innerHTML = `
@@ -2473,7 +3442,7 @@ function confirmIntroSoftDecline() {
       <h2>Not right now?</h2>
       <p>Keep it soft. You can send a note or close this without replying.</p>
       <textarea placeholder="Not right now, but happy to reconnect another time."></textarea>
-      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-dialog-close>Send note</button></div>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-send-intro-decline-note>Send Note</button></div>
     </div>
   `;
   document.body.appendChild(dialog);
@@ -2488,6 +3457,22 @@ function confirmArchiveChat(chatName = "this chat") {
       <h2>Archive chat?</h2>
       <p>This will remove the conversation from your inbox, but the history will remain available where relevant.</p>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-confirm-archive-chat>Archive Chat</button></div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function confirmDeleteArchivedChat(chatName = "this archived chat", key = "") {
+  pendingDeleteChatName = chatName;
+  pendingDeleteChatKey = key;
+  document.querySelector(".discard-dialog")?.remove();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete archived chat">
+      <h2>Delete archived chat?</h2>
+      <p>This permanently removes ${chatName} from this prototype. It cannot be restored or undone.</p>
+      <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-confirm-delete-archived-chat>Delete Chat</button></div>
     </div>
   `;
   document.body.appendChild(dialog);
@@ -2577,9 +3562,9 @@ function completeVerification() {
   cta.textContent = "Confirming...";
 
   const copy = {
-    qr: ["QR matched", "Both phones confirmed an in-person meetup. Checking Trusted Friend slot now."],
-    location: ["Same place confirmed", "Both phones were verified in the same location. Checking Trusted Friend slot now."],
-    mutual: ["Both people confirmed", "You and Emma tapped yes within the meetup window. Checking Trusted Friend slot now."]
+    qr: ["QR matched", "Both phones confirmed an in-person meetup. Emma becomes Met first, not automatically Trusted Friend."],
+    location: ["Same place confirmed", "Both phones were verified in the same location. Emma becomes Met first, not automatically Trusted Friend."],
+    mutual: ["Both people confirmed", "You and Emma tapped yes within the meetup window. Emma becomes Met first, not automatically Trusted Friend."]
   };
 
   panel.innerHTML = `
@@ -2592,30 +3577,171 @@ function completeVerification() {
 
   window.setTimeout(() => {
     instagramAccessUnlocked = true;
-    trustedFriendState.used = Math.min(currentTrustedFriendCap(), trustedFriendState.used + 1);
+    trustedFriendState.verifiedMeetups += 1;
+    appState.confirmedMeetups = Array.isArray(appState.confirmedMeetups) ? appState.confirmedMeetups : [];
+    const metPerson = selectedChatName && selectedChatName !== "Intro Request" ? selectedChatName : "Emma Laurent";
+    addGraphFlag("metConnections", metPerson);
+    appState.confirmedMeetups.unshift({
+      person: metPerson,
+      method: verificationMethod,
+      confirmedAt: new Date().toISOString()
+    });
+    addNotificationEvent("directChat");
+    persistPrototypeState();
     cta.disabled = false;
     showScreen("unlocked", { replace: true });
     cta.textContent = "Complete Verification";
     renderVerification("qr");
+    refreshTrustGraphViews();
   }, 850);
+}
+
+function personCityNames(person = {}) {
+  const cities = new Set();
+  const add = (value) => {
+    if (typeof value === "string" && value.trim()) cities.add(value.trim());
+  };
+  add(person.city);
+  add(person.livesIn);
+  (person.trips || []).forEach((trip) => add(trip.city));
+  const profile = profileForName(person.name);
+  if (profile) {
+    add(profile.city);
+    add(profile.homeCity);
+    (profile.trips || []).forEach((trip) => add(trip.city));
+  }
+  return [...cities];
+}
+
+function cityMatchesPerson(city = "", person = {}) {
+  const target = city.toLowerCase();
+  return personCityNames(person).some((name) => name.toLowerCase() === target);
+}
+
+function graphPersonFromProfile(profile) {
+  const firstPath = profile.paths?.[0] || profile.path || "";
+  return {
+    name: profile.name,
+    city: profile.city,
+    path: firstPath,
+    badge: profile.relationship || profile.directRelationship || "Mutual Connection",
+    cta: profile.directRelationship === "Trusted Friend" ? "Message" : "Request Intro",
+    trips: profile.trips
+  };
+}
+
+function cityGraphPeople(city = "Oslo") {
+  const raw = [
+    ...homePeople,
+    ...networkPeople,
+    ...metPeople,
+    ...secondDegreePeople,
+    ...thirdDegreePeople,
+    ...Object.values(personProfiles).map(graphPersonFromProfile)
+  ];
+  const seen = new Set();
+  return raw
+    .filter((person) => person?.name && !seen.has(nameKey(person.name)) && cityMatchesPerson(city, person) && seen.add(nameKey(person.name)))
+    .map((person) => ({ person, state: connectionStateForPerson(person) || {} }))
+    .sort((a, b) => {
+      const aActive = !a.state.locked && !a.state.archived;
+      const bActive = !b.state.locked && !b.state.archived;
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      if (isTrustedConnection(a.person.name) !== isTrustedConnection(b.person.name)) return isTrustedConnection(a.person.name) ? -1 : 1;
+      if (isMetConnection(a.person.name) !== isMetConnection(b.person.name)) return isMetConnection(a.person.name) ? -1 : 1;
+      return a.person.name.localeCompare(b.person.name);
+    });
+}
+
+function visibleCityGraphPeople(city = "Oslo") {
+  return cityGraphPeople(city).filter(({ state }) => !state.locked && !state.archived);
+}
+
+function branchPeopleFor(name = "", city = "") {
+  const rootKey = nameKey(name);
+  return cityGraphPeople(city)
+    .filter(({ person }) => nameKey(person.name) !== rootKey)
+    .filter(({ person }) => pathParts(person.path || profileForName(person.name)?.path || "").some((part) => nameKey(part) === rootKey))
+    .slice(0, 3);
+}
+
+function updateCityHubCounts() {
+  document.querySelectorAll(".city-node").forEach((node) => {
+    const city = node.dataset.city;
+    const active = visibleCityGraphPeople(city).length;
+    const span = node.querySelector("span");
+    if (span) span.textContent = `${active} active`;
+  });
+}
+
+function renderCityHub(city = "Oslo") {
+  updateCityHubCounts();
+  const card = document.querySelector(".cluster-card");
+  if (!card) return;
+  const people = cityGraphPeople(city);
+  const active = people.filter(({ state }) => !state.locked && !state.archived);
+  const locked = people.filter(({ state }) => state.locked || state.archived);
+  const slots = card.querySelectorAll("[data-cluster-person]");
+  const displayPeople = [...active, ...locked].slice(0, slots.length);
+  slots.forEach((slot, index) => {
+    const item = displayPeople[index];
+    if (!item) {
+      slot.hidden = true;
+      return;
+    }
+    const firstName = item.person.name.split(" ")[0];
+    const lockedState = item.state.locked || item.state.archived;
+    slot.hidden = false;
+    slot.textContent = firstName;
+    slot.dataset.clusterPerson = item.person.name;
+    slot.dataset.networkState = item.state.archived ? "archived" : lockedState ? "locked" : "unlocked";
+    slot.classList.toggle("locked", lockedState);
+    slot.setAttribute("aria-label", `${lockedState ? "Preview" : "Open"} ${firstName}'s ${city} branch`);
+  });
+  const title = card.querySelector("p strong");
+  const copy = card.querySelector("p span");
+  if (title) title.textContent = `${city} trusted hub`;
+  if (copy) copy.textContent = `${active.length} active ${active.length === 1 ? "path" : "paths"} · ${locked.length} locked or archived ${locked.length === 1 ? "branch" : "branches"}.`;
 }
 
 function renderCityMutuals(city) {
   const title = document.querySelector("#cityMutualTitle");
   const copy = document.querySelector("#cityMutualCopy");
   const list = document.querySelector("#cityMutualPeople");
-  const people = cityMutuals[city] || [];
+  const graphPeople = cityGraphPeople(city);
+  const activePeople = graphPeople.filter(({ state }) => !state.locked && !state.archived);
+  const lockedCount = graphPeople.length - activePeople.length;
   if (title) title.textContent = city;
-  if (copy) copy.textContent = `${people.length} trusted people reachable through mutual paths.`;
-  if (list) list.innerHTML = people.map(personCard).join("");
+  if (copy) copy.textContent = `${activePeople.length} active ${activePeople.length === 1 ? "path" : "paths"} in this city${lockedCount ? ` · ${lockedCount} locked or archived` : ""}.`;
+  if (list) {
+    list.innerHTML = activePeople.length
+      ? activePeople.map(({ person }) => personCard(person)).join("")
+      : emptyState("No active paths in this city", "Reconnect a trusted route, confirm a meetup, or add a trip to open this hub.");
+  }
+  updateCityHubCounts();
 }
 
 function renderClusterNetwork(name, state) {
   const card = document.querySelector(".cluster-card");
   const panel = document.querySelector("#personNetworkPanel");
   if (!card || !panel) return;
-  const network = clusterNetworks[name] || { state, path: "Trusted path pending", people: ["Locked", "Locked", "Locked"] };
-  const isLocked = (network.state || state) === "locked";
+  const activeCity = document.querySelector(".city-node.active")?.dataset.city || "Oslo";
+  const network = clusterNetworks[name] || { state, path: "Trusted path pending", people: [] };
+  const profileName = profileForName(name)?.name || name;
+  const isArchived = isRemovedName(profileName);
+  const personState = profileForName(name) ? connectionStateForProfile(profileForName(name)) : null;
+  const isMetOnly = isMetConnection(profileName) && !isTrustedConnection(profileName);
+  const isLocked = isArchived || personState?.locked || isMetOnly || (network.state || state) === "locked";
+  const branch = branchPeopleFor(profileName, activeCity);
+  const branchNames = branch.length ? branch.map(({ person, state: branchState }) => ({ name: person.name.split(" ")[0], locked: branchState.locked || branchState.archived })) : network.people.map((person) => ({ name: person, locked: isLocked }));
+  const title = isArchived ? "Archived path" : isMetOnly ? "Met connection" : isLocked ? "Locked network" : `${profileName.split(" ")[0]}'s branch`;
+  const description = isArchived
+    ? `Previously connected via ${profileName}. Reconnection can reopen this branch.`
+    : isMetOnly
+      ? `${profileName.split(" ")[0]} is Met. Their wider network stays locked until you both become Trusted Friends.`
+      : isLocked
+        ? `${profileName.split(" ")[0]}'s wider circle needs an active trust path before it opens.`
+        : `${personState?.relationship || network.path} · ${branchNames.length || 1} visible ${branchNames.length === 1 ? "route" : "routes"} in ${activeCity}.`;
   card.classList.add("has-network");
   card.querySelectorAll("[data-cluster-person]").forEach((person) => {
     person.classList.toggle("focused", person.dataset.clusterPerson === name);
@@ -2623,13 +3749,13 @@ function renderClusterNetwork(name, state) {
   panel.innerHTML = `
     <div class="person-network-card ${isLocked ? "locked-preview" : "unlocked-preview"}">
       <div>
-        <strong>${isLocked ? "Locked network" : `${name}'s network`}</strong>
-        <span>${isLocked ? `${name}'s circle stays blurred until trust is unlocked.` : network.path}</span>
+        <strong>${title}</strong>
+        <span>${description}</span>
       </div>
       <div class="micro-network" aria-label="${name}'s network preview">
-        ${network.people.map((person) => `<span class="micro-node">${isLocked ? "" : person}</span>`).join("")}
+        ${branchNames.slice(0, 3).map((person) => `<span class="micro-node ${person.locked ? "locked-micro-node" : ""}">${isLocked || person.locked ? "" : person.name}</span>`).join("") || `<span class="micro-node"></span><span class="micro-node"></span>`}
       </div>
-      <button class="network-action" data-next="${isLocked ? "request-intro" : "profile"}">${isLocked ? "Request Intro" : "Open Profile"}</button>
+      <button class="network-action" ${isArchived ? `type="button" data-request-reconnect="${profileName}"` : isLocked ? `type="button" data-profile-name="${profileName}" data-next="request-intro"` : `type="button" data-profile-name="${profileName}" data-next="profile"`}>${isArchived ? "Request Reconnection" : isLocked ? "Request Intro" : "Open Profile"}</button>
     </div>
   `;
 }
@@ -2649,14 +3775,22 @@ function renderIntroMethod(method = "mutual") {
   const recipient = document.querySelector("#introRecipient");
   if (title) title.textContent = method === "mutual" ? `Request intro to ${firstName} via ${mutualName}` : `Request ${firstName} directly`;
   if (pathLine) pathLine.textContent = method === "mutual" ? `Connected via ${mutualName}` : `Direct request to ${firstName}`;
+  const mutualPathActive = method !== "mutual" || isActiveTrustPath(profile.path, profile.name);
   if (method === "mutual") {
     if (recipient) recipient.innerHTML = `<span>Send ${mutualName} a note</span><strong>${mutualName}</strong>`;
-    if (note) note.textContent = `This lands as a normal chat with ${mutualName}, not a formal approval request.`;
+    if (note) note.textContent = mutualPathActive
+      ? `This lands as a normal chat with ${mutualName}, not a formal approval request.`
+      : `This intro path is no longer active. Reconnect with ${mutualName} before requesting this introduction.`;
     if (message) {
       message.value = "";
-      message.placeholder = `Hey ${mutualName} - would love an intro to ${firstName} if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.`;
+      message.placeholder = mutualPathActive
+        ? `Hey ${mutualName} - would love an intro to ${firstName} if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.`
+        : `Reconnect with ${mutualName} to reopen this path.`;
     }
-    if (cta) cta.textContent = "Send Request";
+    if (cta) {
+      cta.textContent = mutualPathActive ? "Send Request" : "Path unavailable";
+      cta.disabled = !mutualPathActive;
+    }
   } else {
     if (recipient) recipient.innerHTML = `<span>Sending to</span><strong>${profile.name}</strong>`;
     if (note) note.textContent = `This goes directly to ${firstName}. Your profile stays partially hidden until ${firstName} accepts.`;
@@ -2664,7 +3798,10 @@ function renderIntroMethod(method = "mutual") {
       message.value = "";
       message.placeholder = `Hey ${firstName} - ${mutualName} is our mutual connection. I would love to connect if it feels right.`;
     }
-    if (cta) cta.textContent = `Send to ${firstName}`;
+    if (cta) {
+      cta.textContent = `Send to ${firstName}`;
+      cta.disabled = false;
+    }
   }
 }
 
@@ -2729,6 +3866,7 @@ function hydrateLists() {
   renderTrustedPlans();
   renderConnectionRequests();
   renderPlanRequests();
+  renderNotifications();
   syncSettingsRows();
 }
 
@@ -2837,28 +3975,88 @@ function bindInteractions() {
       return;
     }
 
+    if (event.target.closest("[data-open-feedback]")) {
+      document.querySelector("#profileMenu")?.classList.remove("open");
+      openFeedbackForm();
+      return;
+    }
+
+    if (event.target.closest("[data-submit-feedback]")) {
+      submitFeedback();
+      return;
+    }
+
     if (event.target.closest("[data-send-intro-message]")) {
       document.querySelector(".discard-dialog")?.remove();
       introThreadStarted = true;
       introThreadLeft = false;
+      appState.introRequestAccepted = true;
+      appState.pendingIntroRequestActive = false;
+      addNotificationEvent("introChat");
+      persistPrototypeState();
       activeChatDetailMode = "intro-group";
       showScreen("chat-detail");
+      return;
+    }
+
+    if (event.target.closest("[data-send-intro-decline-note]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      appState.pendingIntroRequestActive = false;
+      appState.introRequestDeclined = true;
+      connectionRequests.intro.forEach((request) => {
+        if (request.name === "Noah Silva" || request.status === "Waiting for you" || request.status === "New") {
+          request.status = "Declined";
+          request.actions = false;
+        }
+      });
+      renderChats();
+      renderConnectionRequests();
+      addNotificationEvent("declinedIntro");
+      persistPrototypeState();
+      showUtilityFeedback("Intro request declined", "Not right now, but happy to reconnect another time.");
       return;
     }
 
     if (event.target.closest("[data-confirm-leave-intro]")) {
       document.querySelector(".discard-dialog")?.remove();
       introThreadLeft = true;
-      activeChatDetailMode = "intro-group";
+      activeChatDetailMode = "direct_connection_chat";
+      selectedChatName = "Emma Laurent";
+      selectedChatPath = "Introduced by Laura";
+      selectedChatPreview = "Laura introduced you both. You can keep chatting directly.";
+      upsertChat("all", { name: "Emma Laurent", path: "Introduced by Laura", preview: selectedChatPreview, time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
       renderChatDetail();
+      persistPrototypeState();
       return;
     }
 
     if (event.target.closest("[data-confirm-archive-chat]")) {
       document.querySelector(".discard-dialog")?.remove();
+      const chat = findChatByName(pendingArchiveChatCard?.dataset.chatName || "");
+      if (chat) chat.archived = true;
       pendingArchiveChatCard?.remove();
       pendingArchiveChatCard = null;
+      persistPrototypeState();
       showUtilityFeedback("Chat archived", "The conversation left your inbox. History remains available where relevant.");
+      return;
+    }
+
+    if (event.target.closest("[data-confirm-delete-archived-chat]")) {
+      document.querySelector(".discard-dialog")?.remove();
+      if (pendingDeleteChatKey) deletedChatKeys.add(pendingDeleteChatKey);
+      Object.values(chats).forEach((items) => {
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          if (chatKey(items[index]) === pendingDeleteChatKey || items[index].name === pendingDeleteChatName) {
+            items.splice(index, 1);
+          }
+        }
+      });
+      const deletedName = pendingDeleteChatName || "Archived chat";
+      pendingDeleteChatKey = "";
+      pendingDeleteChatName = "";
+      persistPrototypeState();
+      renderChats();
+      showUtilityFeedback("Archived chat deleted", `${deletedName} was permanently removed from this prototype.`);
       return;
     }
 
@@ -2879,6 +4077,7 @@ function bindInteractions() {
       updateHomeTripDateRange();
       markScreenClean("trip");
       if (tripReturnTarget === "trusted") renderTrustedMode("onboarding");
+      persistPrototypeState();
       showScreen(tripReturnTarget);
       return;
     }
@@ -2942,11 +4141,14 @@ function bindInteractions() {
       const card = chatMute.closest(".chat-card");
       const indicator = card?.querySelector(".muted-indicator");
       const isMuted = card?.classList.contains("is-muted");
+      const chat = findChatByName(card?.dataset.chatName || "");
+      if (chat) chat.muted = !isMuted;
       if (indicator) indicator.hidden = isMuted;
       card?.classList.toggle("is-muted", !isMuted);
       card?.querySelectorAll("[data-chat-mute]").forEach((button) => {
         button.setAttribute("aria-label", isMuted ? "Mute chat" : "Unmute chat");
       });
+      persistPrototypeState();
       showUtilityFeedback(isMuted ? "Chat unmuted" : "Chat muted", isMuted ? "Push notifications are back on for this conversation." : "Messages still arrive, but push notifications are paused.");
       return;
     }
@@ -2959,6 +4161,25 @@ function bindInteractions() {
       return;
     }
 
+    const chatUnarchive = event.target.closest("[data-chat-unarchive]");
+    if (chatUnarchive) {
+      const card = chatUnarchive.closest(".chat-card");
+      const chat = findChatByName(card?.dataset.chatName || "");
+      if (chat) chat.archived = false;
+      persistPrototypeState();
+      renderChats();
+      showUtilityFeedback("Chat restored", "The conversation is back in your active inbox.");
+      return;
+    }
+
+    const chatDeleteArchived = event.target.closest("[data-chat-delete-archived]");
+    if (chatDeleteArchived) {
+      const card = chatDeleteArchived.closest(".chat-card");
+      const chat = findChatByName(card?.dataset.chatName || "");
+      confirmDeleteArchivedChat(card?.dataset.chatName || "this archived chat", chat ? chatKey(chat) : chatKey(card?.dataset.chatName || ""));
+      return;
+    }
+
     const introduce = event.target.closest("[data-introduce]");
     if (introduce) {
       confirmIntroduce();
@@ -2967,7 +4188,10 @@ function bindInteractions() {
 
     const introReply = event.target.closest("[data-intro-reply]");
     if (introReply) {
-      activeChatDetailMode = "intro-request";
+      selectedChatName = "Hugo";
+      selectedChatPath = "Intro request reply";
+      selectedChatPreview = "Happy to intro - what are you hoping to connect on?";
+      activeChatDetailMode = "intro-reply";
       showScreen("chat-detail");
       return;
     }
@@ -2982,12 +4206,31 @@ function bindInteractions() {
     if (connectionResponse) {
       const card = connectionResponse.closest(".request-card");
       const accepted = connectionResponse.dataset.requestResponse === "accept";
+      const group = connectionResponse.dataset.requestGroup || requestFilter;
+      const request = connectionRequests[group]?.[Number(connectionResponse.dataset.requestIndex)];
+      if (request) {
+        request.status = accepted ? "Accepted" : "Declined";
+        request.actions = false;
+        if (accepted && group === "met") {
+          addGraphFlag("trustedConnections", request.name);
+          removeGraphFlag("metConnections", request.name);
+          if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+          addNotificationEvent("acceptedIntro");
+        }
+        if (accepted && group === "intro") {
+          introThreadStarted = true;
+          appState.pendingIntroRequestActive = false;
+          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        }
+      }
       card?.classList.add(accepted ? "request-accepted" : "request-declined");
       card?.querySelectorAll(".request-actions button").forEach((button) => {
         if (button !== connectionResponse) button.disabled = true;
       });
       connectionResponse.textContent = accepted ? "Accepted" : "Declined";
       connectionResponse.disabled = true;
+      persistPrototypeState();
+      refreshTrustGraphViews();
       showUtilityFeedback(accepted ? "Request accepted" : "Request declined", accepted ? "The connection request has been accepted." : "The request has been declined.");
       return;
     }
@@ -3002,7 +4245,12 @@ function bindInteractions() {
       });
       planRequestResponse.textContent = accepted ? "Accepted" : "Rejected";
       planRequestResponse.disabled = true;
+      const requestIndex = Number(planRequestResponse.dataset.planRequestIndex);
+      if (!Number.isNaN(requestIndex)) planJoinRequests.splice(requestIndex, 1);
+      syncPlanRequestCounts();
+      persistPrototypeState();
       showUtilityFeedback(accepted ? "Request accepted" : "Request rejected", accepted ? "They can now enter the plan chat." : "The join request has been rejected.");
+      renderPlanRequests();
       return;
     }
 
@@ -3128,6 +4376,17 @@ function bindInteractions() {
       markScreenClean("request-intro");
       chatMode = "default";
       chatFilter = "all";
+      appState.pendingIntroRequestActive = true;
+      upsertConnectionRequest("sent", { name: "Emma Laurent", path: "You -> Laura -> Emma", type: introMethod === "mutual" ? "Via mutual friend" : "Direct request", status: introMethod === "mutual" ? "Sent to Laura" : "Waiting" });
+      upsertNotification({
+        id: `sent-intro-${Date.now()}`,
+        kind: "intro",
+        title: "Intro request sent",
+        body: introMethod === "mutual" ? "Your intro request was sent to Laura." : "Your direct intro request was sent to Emma.",
+        profile: introMethod === "mutual" ? "Laura Chen" : "Emma Laurent",
+        active: true
+      });
+      persistPrototypeState();
       introSend.textContent = "Request sent";
       window.setTimeout(() => showScreen("chats"), 450);
       return;
@@ -3135,24 +4394,65 @@ function bindInteractions() {
 
     const requestPlan = event.target.closest("[data-request-plan]");
     if (requestPlan) {
+      const requestedPlan = selectedPlan();
       const message = document.querySelector("#planJoinMessage")?.value.trim();
       if (message) requestPlan.dataset.requestMessage = message;
       const textarea = document.querySelector("#planJoinMessage");
       if (textarea) textarea.value = "";
       selectedPlanStatus = "pending";
+      upsertPlan("pending", { ...requestedPlan, role: "pending", viewerStatus: "pending", status: "Pending Approval" });
+      upsertNotification({
+        id: `plan-request-${selectedPlanName.replaceAll(" ", "-").toLowerCase()}`,
+        kind: "plan-view",
+        title: "Plan request sent",
+        body: `Your request to join ${selectedPlanName} is waiting for host approval.`,
+        active: true
+      });
+      persistPrototypeState();
       renderPlanDetail();
       return;
     }
 
     const cancelPlanRequest = event.target.closest("[data-cancel-plan-request]");
     if (cancelPlanRequest) {
+      const pendingIndex = myPlans.pending.findIndex((plan) => plan.name === selectedPlanName);
+      if (pendingIndex >= 0) myPlans.pending.splice(pendingIndex, 1);
       selectedPlanStatus = "discoverable";
+      notificationItems.forEach((item) => {
+        if (item.id.startsWith("plan-request-")) item.active = false;
+      });
+      persistPrototypeState();
       renderPlanDetail();
+      return;
+    }
+
+    const mutedPlanAction = event.target.closest(".muted-plan-action:not([data-next]):not([data-clear-report-history])");
+    if (mutedPlanAction) {
+      const label = mutedPlanAction.textContent.trim();
+      if (label.includes("Leave")) {
+        const planIndex = myPlans.attending.findIndex((plan) => plan.name === selectedPlanName);
+        if (planIndex >= 0) myPlans.attending.splice(planIndex, 1);
+        persistPrototypeState();
+        showUtilityFeedback("Plan left", "You have left this plan in the local prototype.");
+        showScreen("my-plans");
+        return;
+      }
+      if (label.includes("Cancel Request")) {
+        const planIndex = myPlans.pending.findIndex((plan) => plan.name === selectedPlanName);
+        if (planIndex >= 0) myPlans.pending.splice(planIndex, 1);
+        persistPrototypeState();
+        showUtilityFeedback("Request cancelled", "Your pending request was cancelled.");
+        renderPersonPlans();
+        renderMyPlans();
+        return;
+      }
+      showUtilityFeedback("Action saved", `${label} is wired in the local prototype.`);
       return;
     }
 
     const savePlan = event.target.closest("[data-save-plan]");
     if (savePlan) {
+      if (!saveEditedPlan()) return;
       markScreenClean("edit-plan");
       savePlan.textContent = "Saved";
       window.setTimeout(() => {
@@ -3214,7 +4514,13 @@ function bindInteractions() {
     const safetyAction = event.target.closest(".action-grid button:not([data-next])");
     if (safetyAction) {
       const label = safetyAction.textContent.trim();
-      showUtilityFeedback(label, "This opens the relevant safety flow in the live beta.");
+      openSafetyAction(label);
+      return;
+    }
+
+    const submitSafety = event.target.closest("[data-submit-safety-action]");
+    if (submitSafety) {
+      submitSafetyAction(submitSafety.dataset.submitSafetyAction);
       return;
     }
 
@@ -3247,6 +4553,7 @@ function bindInteractions() {
       if (selected) settingsState.privacy[key] = selected.dataset.privacyValue;
       document.querySelector(".discard-dialog")?.remove();
       syncSettingsRows();
+      persistPrototypeState();
       showUtilityFeedback("Privacy updated", `${privacyOptions[key]?.title || "Setting"} is now ${settingsState.privacy[key]}.`);
       return;
     }
@@ -3256,6 +4563,7 @@ function bindInteractions() {
       const key = notificationSetting.dataset.notificationSetting;
       settingsState.notifications[key] = !settingsState.notifications[key];
       syncSettingsRows();
+      persistPrototypeState();
       return;
     }
 
@@ -3274,6 +4582,7 @@ function bindInteractions() {
       settingsState.connectedAccounts.instagram = !settingsState.connectedAccounts.instagram;
       renderSettingsDetail();
       syncSettingsRows();
+      persistPrototypeState();
       showUtilityFeedback(settingsState.connectedAccounts.instagram ? "Instagram connected" : "Instagram disconnected", settingsState.connectedAccounts.instagram ? "Instagram is available for trusted profile context." : "Instagram is no longer connected.");
       return;
     }
@@ -3283,6 +4592,7 @@ function bindInteractions() {
       settingsState.blockedUsers = settingsState.blockedUsers.filter((name) => name !== unblockUser.dataset.unblockUser);
       renderSettingsDetail();
       syncSettingsRows();
+      persistPrototypeState();
       showUtilityFeedback("User unblocked", `${unblockUser.dataset.unblockUser} is no longer blocked.`);
       return;
     }
@@ -3292,6 +4602,7 @@ function bindInteractions() {
       settingsState.reportHistory = [];
       renderSettingsDetail();
       syncSettingsRows();
+      persistPrototypeState();
       showUtilityFeedback("Report history cleared", "Local report history has been cleared in this prototype.");
       return;
     }
@@ -3301,6 +4612,7 @@ function bindInteractions() {
       settingsState.appearance = appearanceChoice.dataset.appearanceChoice;
       renderSettingsDetail();
       syncSettingsRows();
+      persistPrototypeState();
       showUtilityFeedback("Appearance updated", `${settingsState.appearance} appearance selected.`);
       return;
     }
@@ -3308,6 +4620,108 @@ function bindInteractions() {
     const settingsFeedback = event.target.closest("[data-settings-feedback]");
     if (settingsFeedback) {
       showUtilityFeedback(settingsFeedback.dataset.settingsFeedback, "This action is wired in the prototype and will connect to backend services in beta.");
+      return;
+    }
+
+    const devAction = event.target.closest("[data-dev-action]");
+    if (devAction) {
+      const action = devAction.dataset.devAction;
+      if (action === "intro-request") {
+        appState.pendingIntroRequestActive = true;
+        appState.introRequestDeclined = false;
+        upsertConnectionRequest("intro", { name: "Noah Silva", path: "You -> Laura -> Noah", type: "Intro request received", status: "Waiting for you", actions: true });
+        addNotificationEvent("introRequest");
+      }
+      if (action === "accepted-intro") {
+        appState.introRequestAccepted = true;
+        introThreadStarted = true;
+        introThreadLeft = false;
+        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        addNotificationEvent("acceptedIntro");
+      }
+      if (action === "declined-intro") {
+        appState.pendingIntroRequestActive = false;
+        appState.introRequestDeclined = true;
+        connectionRequests.intro.forEach((request) => {
+          if (request.name === "Noah Silva") {
+            request.status = "Declined";
+            request.actions = false;
+          }
+        });
+        addNotificationEvent("declinedIntro");
+      }
+      if (action === "intro-chat") {
+        introThreadStarted = true;
+        introThreadLeft = false;
+        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        addNotificationEvent("introChat");
+      }
+      if (action === "direct-chat") {
+        introThreadLeft = true;
+        activeChatDetailMode = "direct_connection_chat";
+        upsertChat("all", { name: "Emma Laurent", path: "Introduced by Laura", preview: "Laura introduced you both. You can keep chatting directly.", time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
+        addNotificationEvent("directChat");
+      }
+      if (action === "plan-chat") {
+        selectedPlanName = "Coffee in Shoreditch";
+        selectedPlanStatus = "hosting";
+        upsertChat("all", { name: "Coffee in Shoreditch", path: "Plan · private group", preview: "New plan chat activity from Developer Mode.", time: "Now", unread: true, trusted: true, screen: "plan-chat", chatType: "plan_chat", planStatus: "hosting" });
+        upsertChat("plans", { name: "Coffee in Shoreditch", path: "Plan · private group", preview: "New plan chat activity from Developer Mode.", time: "Now", unread: true, trusted: true, screen: "plan-chat", chatType: "plan_chat", planStatus: "hosting" });
+        addNotificationEvent("planChat");
+      }
+      if (action === "plan-join") {
+        upsertPlanJoinRequest({ name: "Noah Silva", path: "You -> Laura -> Noah", vouch: "2 mutuals", message: "Developer generated join request." });
+        addNotificationEvent("planJoin");
+      }
+      if (action === "plan-approval") {
+        myPlans.pending.unshift({ name: "Developer coffee plan", host: "Emma", path: "You -> Laura -> Emma", time: "Fri, 3:00 PM", location: "Soho", joined: 2, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" });
+        addNotificationEvent("planApproval");
+      }
+      if (action === "trip-overlap") {
+        appState.generatedTrips += 1;
+        homeTrips.unshift({ id: `developer-overlap-${Date.now()}`, city: "Barcelona", country: "Spain", start: "2026-11-10", end: "2026-11-14", visibility: "trusted network only", status: "Trip overlap" });
+        addNotificationEvent("tripOverlap");
+      }
+      if (action === "notifications") notificationItems.forEach((item) => { item.active = true; });
+      if (action === "trips") {
+        appState.generatedTrips += 1;
+        myTrips.unshift({ id: `developer-trip-${Date.now()}`, city: "Madrid", country: "Spain", start: "2026-09-12", end: "2026-09-15", visibility: "trusted network only", status: "Developer trip" });
+        addNotificationEvent("trip");
+      }
+      if (action === "empty-states") {
+        notificationItems.forEach((item) => { item.active = false; });
+        Object.values(connectionRequests).forEach((requests) => requests.splice(0, requests.length));
+        planJoinRequests.splice(0, planJoinRequests.length);
+        Object.values(chats).forEach((items) => items.forEach((chat) => { chat.archived = true; }));
+        myPlans.hosting.splice(0, myPlans.hosting.length);
+        myPlans.attending.splice(0, myPlans.attending.length);
+        myPlans.pending.splice(0, myPlans.pending.length);
+        myPlans.past.splice(0, myPlans.past.length);
+        myTrips.splice(0, myTrips.length);
+        homeTrips.splice(0, homeTrips.length);
+        homePeople.splice(0, homePeople.length);
+        networkPeople.splice(0, networkPeople.length);
+        discoverablePlans.splice(0, discoverablePlans.length);
+        activeHomeTripId = "";
+        syncPlanRequestCounts();
+      }
+      if (action === "read-notifications") {
+        appState.notificationsRead = true;
+        notificationItems.forEach((item) => { item.active = false; });
+      }
+      if (action === "reset") {
+        window.localStorage.removeItem(prototypeStorageKey);
+        window.location.reload();
+        return;
+      }
+      renderSettingsDetail();
+      renderChats();
+      renderNotifications();
+      renderConnectionRequests();
+      renderPlanRequests();
+      renderMyPlans();
+      persistPrototypeState();
+      showUtilityFeedback("Developer action applied", "Demo state updated locally for testing.");
       return;
     }
 
@@ -3325,6 +4739,14 @@ function bindInteractions() {
 
     const confirmDeleteAccount = event.target.closest("[data-confirm-delete-account]");
     if (confirmDeleteAccount) {
+      const value = document.querySelector("#deleteConfirmInput")?.value.trim().toUpperCase();
+      const error = document.querySelector("#deleteConfirmError");
+      if (value !== "DELETE") {
+        if (error) error.textContent = "Type DELETE to confirm account deletion.";
+        return;
+      }
+      appState.accountDeletionQueued = true;
+      persistPrototypeState();
       document.querySelector(".discard-dialog")?.remove();
       showUtilityFeedback("Account deletion queued", "In the live beta, this would start permanent account deletion after backend confirmation.");
       return;
@@ -3342,6 +4764,67 @@ function bindInteractions() {
       return;
     }
 
+    const messagePerson = event.target.closest("[data-message-person]");
+    if (messagePerson) {
+      openDirectChatWith(messagePerson.dataset.messagePerson, {
+        preview: `Start a direct conversation with ${messagePerson.dataset.messagePerson.split(" ")[0]}.`
+      });
+      return;
+    }
+
+    const notificationAction = event.target.closest("[data-notification-action]");
+    if (notificationAction) {
+      const item = notificationItems.find((notification) => notification.id === notificationAction.dataset.notificationId);
+      const accepted = notificationAction.dataset.notificationAction === "accept";
+      if (item) {
+        item.active = false;
+        if (accepted && item.kind === "plan" && myPlans.hosting[0]) {
+          myPlans.hosting[0].joined = Math.min(myPlans.hosting[0].max, myPlans.hosting[0].joined + 1);
+        }
+        if (item.kind === "plan") {
+          const requestIndex = planJoinRequests.findIndex((request) => request.name === item.profile);
+          if (requestIndex >= 0) planJoinRequests.splice(requestIndex, 1);
+          syncPlanRequestCounts();
+        }
+        if (accepted && item.kind === "intro") {
+          introThreadStarted = true;
+          appState.pendingIntroRequestActive = false;
+          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        }
+        if (!accepted && item.kind === "intro") {
+          appState.pendingIntroRequestActive = false;
+          appState.introRequestDeclined = true;
+        }
+      }
+      renderNotifications();
+      persistPrototypeState();
+      showUtilityFeedback(accepted ? "Request accepted" : "Request declined", accepted ? "The request has been accepted and the relevant state updated." : "The request has been declined and removed from active alerts.");
+      return;
+    }
+
+    const notificationProfile = event.target.closest("[data-notification-profile]");
+    if (notificationProfile) {
+      selectedProfileName = notificationProfile.dataset.notificationProfile;
+      showScreen("profile");
+      return;
+    }
+
+    const notificationChat = event.target.closest("[data-notification-chat]");
+    if (notificationChat) {
+      const chatType = notificationChat.dataset.chatType || "direct_connection_chat";
+      if (chatType === "plan_chat" || chatType === "archived_plan_chat") {
+        selectedPlanName = notificationChat.dataset.notificationChat;
+        selectedPlanStatus = chatType === "archived_plan_chat" ? "past" : planStatusForName(selectedPlanName);
+        showScreen("plan-chat");
+        return;
+      }
+      openDirectChatWith(notificationChat.dataset.notificationChat, {
+        mode: chatType,
+        preview: "Open the conversation from this notification."
+      });
+      return;
+    }
+
     const city = event.target.closest(".city-node");
     if (city) {
       const sky = document.querySelector(".city-sky");
@@ -3353,7 +4836,7 @@ function bindInteractions() {
       card.classList.remove("has-network");
       document.querySelector("#personNetworkPanel")?.replaceChildren();
       document.querySelectorAll("[data-cluster-person]").forEach((person) => person.classList.remove("focused"));
-      card.querySelector("p strong").textContent = `${city.dataset.city} trusted hub`;
+      renderCityHub(city.dataset.city);
       return;
     }
 
@@ -3367,6 +4850,10 @@ function bindInteractions() {
     if (next) {
       document.querySelector("#profileMenu")?.classList.remove("open");
       const current = document.querySelector(".screen.active")?.dataset.screen;
+      if (next.textContent.trim().toLowerCase() === "back") {
+        goBack();
+        return;
+      }
       if (next.dataset.profileName) selectedProfileName = next.dataset.profileName;
       if (next.dataset.planName) selectedPlanName = next.dataset.planName;
       if (next.dataset.planStatus) selectedPlanStatus = next.dataset.planStatus;
@@ -3381,6 +4868,14 @@ function bindInteractions() {
       }
       if (next.dataset.next === "trusted") renderTrustedMode("onboarding");
       if (next.dataset.next === "qr-reveal") renderQrRevealMode("home");
+      if (next.dataset.next === "chats" && !next.dataset.chatMode && next.textContent.toLowerCase().includes("message")) {
+        const plan = selectedPlan();
+        const recipient = next.dataset.messagePerson || (next.textContent.toLowerCase().includes("host") ? plan.host : selectedProfileName);
+        openDirectChatWith(recipient === "You" ? "Hugo" : recipient, {
+          preview: next.textContent.toLowerCase().includes("host") ? `Message ${recipient} about ${plan.name}.` : `Message ${recipient}.`
+        });
+        return;
+      }
       if (next.dataset.chatMode) {
         chatMode = next.dataset.chatMode;
         chatReturnTarget = current || "home";
@@ -3390,7 +4885,9 @@ function bindInteractions() {
         chatMode = "default";
       }
       if (next.dataset.next === "chat-detail") {
-        if (next.dataset.chatType === "intro_chat") {
+        if (next.dataset.chatArchived === "true") {
+          activeChatDetailMode = "archived_chat";
+        } else if (next.dataset.chatType === "intro_chat") {
           activeChatDetailMode = "intro-group";
           introThreadStarted = true;
           introThreadLeft = next.dataset.chatRole !== "introducer";
@@ -3406,8 +4903,10 @@ function bindInteractions() {
 
     const publishPlan = event.target.closest("[data-publish-plan]");
     if (publishPlan) {
+      publishCreatedPlan();
       planFilter = "hosting";
       selectedPlanStatus = "hosting";
+      markScreenClean("create-plan");
       showScreen("my-plans");
       return;
     }
@@ -3462,9 +4961,11 @@ function bindInteractions() {
 
 }
 
+applyStoredPrototypeState();
 cleanBrandingImages();
 hydrateLists();
 setPrivacyMode();
 ensureBackButtons();
 document.querySelectorAll(".bottom-nav").forEach(renderNav);
 bindInteractions();
+updateNotificationBadges();
