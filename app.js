@@ -731,8 +731,25 @@ function currentTrustedFriendCap() {
 
 function renderTrustCaps() {
   const slotCopy = document.querySelector("#trustedSlotCopy");
-  if (!slotCopy) return;
-  slotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} used · max ${trustedFriendState.absoluteCap} · unlock more through verified meetups, hosting and trusted vouches.`;
+  if (slotCopy) {
+    slotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} used · max ${trustedFriendState.absoluteCap} · unlock more through verified meetups, hosting and trusted vouches.`;
+  }
+  const networkSlotCopy = document.querySelector("#networkTrustedSlotCopy");
+  if (networkSlotCopy) {
+    networkSlotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} launch slots used · cap ${trustedFriendState.absoluteCap}`;
+  }
+  const mapTrustedSlotCount = document.querySelector("#mapTrustedSlotCount");
+  if (mapTrustedSlotCount) {
+    mapTrustedSlotCount.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap}`;
+  }
+  const mapMetCount = document.querySelector("#mapMetCount");
+  if (mapMetCount) {
+    mapMetCount.textContent = `${uniquePeopleByName([...metPeople, ...dynamicMetPeople()]).filter((person) => !isTrustedConnection(person.name)).length}`;
+  }
+  const mapTrustedCap = document.querySelector("#mapTrustedCap");
+  if (mapTrustedCap) {
+    mapTrustedCap.textContent = `${trustedFriendState.absoluteCap}`;
+  }
 }
 
 function stopVerificationCountdown() {
@@ -1486,6 +1503,7 @@ function showScreen(id, options = {}) {
   if (id === "notifications") renderNotifications();
   if (id === "profile") renderProfile();
   updateNotificationBadges();
+  renderTrustCaps();
 }
 
 function confirmDiscardChanges(onDiscard) {
@@ -1605,7 +1623,7 @@ function confirmRemoveConnection(name) {
       removedConnections.add(name);
       removeGraphFlag("trustedConnections", name);
       removeGraphFlag("metConnections", name);
-      if (profile.directRelationship === "Trusted Friend" && trustedFriendState.used > 0) trustedFriendState.used -= 1;
+      if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used > 0) trustedFriendState.used -= 1;
       Object.values(chats).flat().forEach((chat) => {
         if (chat.name === name || pathDependsOnRemoved(chat.path, chat.name)) chat.archived = true;
       });
@@ -1642,7 +1660,7 @@ function confirmReconnection(name) {
     if (event.target.closest("[data-send-reconnect]")) {
       removedConnections.delete([...removedConnections].find((removed) => nameKey(removed) === nameKey(name)) || name);
       addGraphFlag("trustedConnections", name);
-      if (profile.directRelationship === "Trusted Friend" && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+      if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
       Object.values(chats).flat().forEach((chat) => {
         if (chat.name === name || pathParts(chat.path).some((part) => nameKey(part) === nameKey(name))) chat.archived = false;
       });
@@ -1651,6 +1669,26 @@ function confirmReconnection(name) {
       refreshTrustGraphViews();
     }
   });
+  document.body.append(dialog);
+}
+
+function confirmTrustedUpgrade(name) {
+  const profile = profileForName(name);
+  if (!profile) return;
+  document.querySelector(".discard-dialog")?.remove();
+  const firstName = profile.name.split(" ")[0];
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = `
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="Upgrade trusted connection">
+      <strong>Make ${firstName} a Trusted Friend?</strong>
+      <p>This uses a Trusted Friend slot and opens ${firstName}'s wider network branch. You can remove this connection later without deleting past chats, plans or meetup history.</p>
+      <div>
+        <button type="button" data-dialog-close>Cancel</button>
+        <button type="button" data-confirm-trust-upgrade="${profile.name}">Confirm Trusted Friend</button>
+      </div>
+    </div>
+  `;
   document.body.append(dialog);
 }
 
@@ -2392,12 +2430,15 @@ function renderProfile() {
   const pastPlans = allPlans.filter((plan) => plan.role === "past").length;
   const actionLabel = connectionState.action || (profile.relationship === "Trusted Friend" ? "Message" : profile.relationship === "Met" ? "Request Trusted Connection" : "Request Intro");
   const actionTarget = actionLabel === "Message" ? "chat-detail" : "request-intro";
+  const isTrustUpgradeAction = actionLabel === "Request Trusted Connection";
   const chatTypeAttr = actionLabel === "Message"
     ? ` data-chat-type="${profile.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat"}" data-chat-name="${profile.name}" data-chat-path="${connectionState.path}" data-chat-preview="Message ${profile.name.split(" ")[0]} directly."`
     : "";
   const primaryAction = connectionState.archived
     ? `<button type="button" data-request-reconnect="${profile.name}">Request Reconnection</button>`
-    : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"${chatTypeAttr}`}>${actionLabel}</button>`;
+    : isTrustUpgradeAction
+      ? `<button type="button" data-trust-upgrade="${profile.name}">${actionLabel}</button>`
+      : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"${chatTypeAttr}`}>${actionLabel}</button>`;
   root.innerHTML = `
     <div class="cover"></div>
     <section class="profile-head">
@@ -2465,6 +2506,7 @@ function personCard(person, index = 0) {
   const nextScreen = cardCta.includes("Request") || cardCta.includes("Path") ? "request-intro" : "profile";
   const hasProfile = Boolean(personProfiles[person.name]);
   const action = isArchived ? "Request Reconnection" : isLocked ? "Locked" : cardCta;
+  const isMessageAction = action === "Message";
   const isHomeDiscovery = ["home", "nearby-people"].includes(activeScreenId());
   const parts = pathParts(person.path || "");
   const mutualName = parts.length > 2 ? parts[1] : "";
@@ -2497,7 +2539,7 @@ function personCard(person, index = 0) {
         <p>${suggestionContext || discoveryContext || `${person.city} · ${context}`}</p>
         ${suggestionWhy}
       </div>
-      <button ${isArchived ? `type="button" data-request-reconnect="${person.name}"` : isLocked ? "disabled" : `data-next="${nextScreen}" ${hasProfile ? `data-profile-name="${person.name}"` : ""}`}>${action}</button>
+      <button ${isArchived ? `type="button" data-request-reconnect="${person.name}"` : isLocked ? "disabled" : action === "Request Trusted Connection" ? `type="button" data-trust-upgrade="${person.name}"` : isMessageAction ? `type="button" data-message-person="${person.name}"` : `data-next="${nextScreen}" ${hasProfile ? `data-profile-name="${person.name}"` : ""}`}>${action}</button>
     </article>
   `;
 }
@@ -3101,14 +3143,62 @@ function networkPersonMatches(person, group, query) {
   return true;
 }
 
+function profileNetworkPerson(name, fallback = {}) {
+  const profile = profileForName(name);
+  if (!profile) return null;
+  const state = connectionStateForProfile(profile);
+  return {
+    name: profile.name,
+    city: profile.city,
+    livesIn: profile.city,
+    path: state.path,
+    badge: state.relationship,
+    cta: state.action,
+    degree: state.relationship === "Trusted Friend" ? 1 : fallback.degree,
+    trips: profile.trips || fallback.trips || [],
+    recent: fallback.recent
+  };
+}
+
+function uniquePeopleByName(people = []) {
+  const seen = new Set();
+  return people.filter((person) => {
+    if (!person?.name) return false;
+    const key = nameKey(person.name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dynamicTrustedPeople() {
+  const staticNames = new Set(networkPeople.map((person) => nameKey(person.name)));
+  return directTrustedNames()
+    .filter((name) => !staticNames.has(nameKey(name)))
+    .map((name) => profileNetworkPerson(name))
+    .filter(Boolean);
+}
+
+function dynamicMetPeople() {
+  const staticNames = new Set(metPeople.map((person) => nameKey(person.name)));
+  const names = [
+    ...graphList("metConnections"),
+    ...(Array.isArray(appState.confirmedMeetups) ? appState.confirmedMeetups.map((meetup) => meetup.person) : [])
+  ];
+  return uniquePeopleByName(names.map((name) => profileNetworkPerson(name)).filter(Boolean))
+    .filter((person) => !staticNames.has(nameKey(person.name)) && !isTrustedConnection(person.name));
+}
+
 function renderNetworkLists() {
   const query = document.querySelector("#networkSearch")?.value.trim().toLowerCase() || "";
   let totalVisible = 0;
+  const staticTrustedPeople = networkPeople.filter((person) => isTrustedConnection(person.name));
+  const staticMutualPeople = networkPeople.filter((person) => !isTrustedConnection(person.name) && !isMetConnection(person.name));
   const groups = [
-    { key: "trusted", selector: ".network-cards", people: networkPeople },
-    { key: "met", selector: ".met-cards", people: metPeople },
-    { key: "second", selector: ".trusted-cards", people: secondDegreePeople },
-    { key: "third", selector: ".third-degree-cards", people: thirdDegreePeople }
+    { key: "trusted", selector: ".network-cards", people: uniquePeopleByName([...staticTrustedPeople, ...dynamicTrustedPeople()]) },
+    { key: "met", selector: ".met-cards", people: uniquePeopleByName([...metPeople, ...dynamicMetPeople()]).filter((person) => !isTrustedConnection(person.name)) },
+    { key: "second", selector: ".trusted-cards", people: uniquePeopleByName([...staticMutualPeople, ...secondDegreePeople]).filter((person) => !isTrustedConnection(person.name) && !isMetConnection(person.name)) },
+    { key: "third", selector: ".third-degree-cards", people: thirdDegreePeople.filter((person) => !isTrustedConnection(person.name) && !isMetConnection(person.name)) }
   ];
   groups.forEach((group) => {
     const target = document.querySelector(group.selector);
@@ -3690,7 +3780,7 @@ function renderCityHub(city = "Oslo") {
       return;
     }
     const firstName = item.person.name.split(" ")[0];
-    const lockedState = item.state.locked || item.state.archived;
+    const lockedState = Boolean(item.state.locked || item.state.archived);
     slot.hidden = false;
     slot.textContent = firstName;
     slot.dataset.clusterPerson = item.person.name;
@@ -3733,7 +3823,7 @@ function renderClusterNetwork(name, state) {
   const isMetOnly = isMetConnection(profileName) && !isTrustedConnection(profileName);
   const isLocked = isArchived || personState?.locked || isMetOnly || (network.state || state) === "locked";
   const branch = branchPeopleFor(profileName, activeCity);
-  const branchNames = branch.length ? branch.map(({ person, state: branchState }) => ({ name: person.name.split(" ")[0], locked: branchState.locked || branchState.archived })) : network.people.map((person) => ({ name: person, locked: isLocked }));
+  const branchNames = branch.length ? branch.map(({ person, state: branchState }) => ({ name: person.name.split(" ")[0], locked: Boolean(branchState.locked || branchState.archived) })) : network.people.map((person) => ({ name: person, locked: isLocked }));
   const title = isArchived ? "Archived path" : isMetOnly ? "Met connection" : isLocked ? "Locked network" : `${profileName.split(" ")[0]}'s branch`;
   const description = isArchived
     ? `Previously connected via ${profileName}. Reconnection can reopen this branch.`
@@ -4060,6 +4150,19 @@ function bindInteractions() {
       return;
     }
 
+    const confirmTrustUpgrade = event.target.closest("[data-confirm-trust-upgrade]");
+    if (confirmTrustUpgrade) {
+      const name = confirmTrustUpgrade.dataset.confirmTrustUpgrade;
+      document.querySelector(".discard-dialog")?.remove();
+      addGraphFlag("trustedConnections", name);
+      removeGraphFlag("metConnections", name);
+      if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+      addNotificationEvent("acceptedIntro");
+      refreshTrustGraphViews();
+      showUtilityFeedback("Trusted Friend added", `${name.split(" ")[0]}'s branch is now active. City hubs, suggestions and plans can expand through this trusted route.`);
+      return;
+    }
+
     const onboardingDot = event.target.closest("[data-onboarding-dot]");
     if (onboardingDot) {
       onboardingSlide = Number(onboardingDot.dataset.onboardingDot);
@@ -4116,6 +4219,12 @@ function bindInteractions() {
     const requestReconnect = event.target.closest("[data-request-reconnect]");
     if (requestReconnect) {
       confirmReconnection(requestReconnect.dataset.requestReconnect);
+      return;
+    }
+
+    const trustUpgrade = event.target.closest("[data-trust-upgrade]");
+    if (trustUpgrade) {
+      confirmTrustedUpgrade(trustUpgrade.dataset.trustUpgrade);
       return;
     }
 

@@ -13,7 +13,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/logo-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/logo-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=85" />
+    <link rel="stylesheet" href="./styles.css?v=91" />
   </head>
   <body>
     <main class="phone-shell" aria-label="6dgrs mobile app prototype">
@@ -405,7 +405,7 @@
           </header>
           <div class="view-toggle"><button class="active" data-next="network-list">List</button><button data-next="network-map">Map</button></div>
           <section class="trust-system-card">
-            <div><strong>Trusted Friends</strong><span>4/6 launch slots used · cap 12</span></div>
+            <div><strong>Trusted Friends</strong><span id="networkTrustedSlotCopy">4/6 launch slots used · cap 12</span></div>
             <div><strong>Unlocks</strong><span>+2 after 2 verified meetups · +1 for hosting · +1 per trusted vouch</span></div>
           </section>
           <label class="search-bar network-search"><span></span><input id="networkSearch" placeholder="Search name or city" /></label>
@@ -445,7 +445,7 @@
             <div class="person-network-panel" id="personNetworkPanel" aria-live="polite"></div>
           </div>
           <div class="map-bottom glass-card">
-            <div><strong>4/6</strong><span>Trusted Friends</span></div><div><strong>6</strong><span>Met only</span></div><div><strong>12</strong><span>Max cap</span></div>
+            <div><strong id="mapTrustedSlotCount">4/6</strong><span>Trusted Friends</span></div><div><strong id="mapMetCount">6</strong><span>Met only</span></div><div><strong id="mapTrustedCap">12</strong><span>Max cap</span></div>
             <button data-next="network-list">Explore trusted paths</button>
           </div>
         </div>
@@ -496,8 +496,8 @@
           <h1>Meetup Confirmed</h1>
           <p>Emma is now Met. Her wider network stays locked unless both of you later become Trusted Friends.</p>
           <div class="new-people"><div><span>MB</span></div><div><span>AR</span></div><div><span>NK</span></div><div><span>SR</span></div><div><span>JO</span></div></div>
-          <div class="reach-card"><strong>Network Unlocked</strong><span>Only Trusted Friends unlock wider visibility. People you only met at plans remain Met until upgraded.</span></div>
-          <div class="gain-grid"><div><strong>5/6</strong><span>Slots used</span></div><div><strong>2°</strong><span>New paths</span></div><div><strong>12</strong><span>Max cap</span></div></div>
+          <div class="reach-card"><strong>Meetup Recorded</strong><span>Emma is now Met. Only Trusted Friends unlock wider visibility, so her branch stays closed until you both upgrade.</span></div>
+          <div class="gain-grid"><div><strong>Met</strong><span>New status</span></div><div><strong>Locked</strong><span>Wider branch</span></div><div><strong>12</strong><span>Max cap</span></div></div>
         </div>
         <div class="sticky-cta dual"><button class="primary-button" data-next="network-map">Explore New Connections</button><button class="secondary-button" data-next="home">Continue Exploring</button></div>
       </section>
@@ -705,6 +705,6 @@
         <nav class="bottom-nav"></nav>
       </section>
     </main>
-    <script src="./app.js?v=84"></script>
+    <script src="./app.js?v=91"></script>
   </body>
 </html>
