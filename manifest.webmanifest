@@ -1,0 +1,18 @@
+{
+  "name": "6dgrs",
+  "short_name": "6dgrs",
+  "description": "Trusted social travel through friends-of-friends, introductions, trips, and small plans.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf9ff",
+  "theme_color": "#f4f1ff",
+  "icons": [
+    {
+      "src": "./assets/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
