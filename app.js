@@ -40,6 +40,7 @@ let pendingDeleteChatName = "";
 let introThreadStarted = false;
 let introThreadLeft = false;
 let chatReturnTarget = "home";
+let pendingSharedRecipient = "";
 let activeSettingsDetail = "phone";
 const removedConnections = new Set();
 const deletedChatKeys = new Set();
@@ -47,6 +48,7 @@ const screenHistory = [];
 const rootScreens = new Set(["welcome", "home", "network-list", "chats", "my-profile"]);
 const dirtyScreens = new Set(["basics", "profile-setup", "trip", "request-intro", "create-plan", "edit-plan", "edit-profile", "plan-chat"]);
 const backFallbacks = {
+  "onboarding-intro": "welcome",
   basics: "welcome",
   "profile-setup": "basics",
   trip: "trusted",
@@ -81,6 +83,55 @@ const backFallbacks = {
   profile: "home"
 };
 const prototypeStorageKey = "sixdgrsPrototypeState";
+const dialogSelector = ".discard-dialog";
+
+function query(selector, root = document) {
+  return root.querySelector(selector);
+}
+
+function queryAll(selector, root = document) {
+  return [...root.querySelectorAll(selector)];
+}
+
+function closeActiveDialog() {
+  query(dialogSelector)?.remove();
+}
+
+function openDialog(markup, onClick) {
+  closeActiveDialog();
+  const dialog = document.createElement("div");
+  dialog.className = "discard-dialog";
+  dialog.innerHTML = markup;
+  if (onClick) dialog.addEventListener("click", (event) => onClick(event, dialog));
+  document.body.append(dialog);
+  return dialog;
+}
+
+function closeOnBackdropOr(selector, event, dialog) {
+  if (event.target === dialog || event.target.closest(selector)) {
+    dialog.remove();
+    return true;
+  }
+  return false;
+}
+
+function readStoredJson(key, fallback = {}) {
+  try {
+    return JSON.parse(window.localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const trustedFriendState = {
   used: 4,
   launchCap: 6,
@@ -124,7 +175,14 @@ const appState = {
   metConnections: [],
   trustedConnections: [],
   vouchedConnections: [],
-  feedback: []
+  feedback: [],
+  onboardingCompleted: false,
+  accountCreated: false,
+  homeTourStep: 0,
+  homeTourComplete: false,
+  productTourStep: 0,
+  productTourActive: false,
+  productTourCompleted: false
 };
 
 const notificationItems = [
@@ -345,6 +403,8 @@ function updateHomeTripDateRange() {
   const start = formatTripDate(document.querySelector("#tripStartDate")?.value);
   const end = formatTripDate(document.querySelector("#tripEndDate")?.value);
   const destination = document.querySelector(".trip-card input[type='text']")?.value.trim() || "Upcoming trip";
+  const reason = document.querySelector("#tripReason")?.value.trim() || "";
+  const hiddenFrom = selectedHiddenTripPeople();
   if (start && end) homeTripDateRange = `${start}-${end}`;
   if (start && !end) homeTripDateRange = start;
   if (start) {
@@ -356,12 +416,21 @@ function updateHomeTripDateRange() {
       start: document.querySelector("#tripStartDate")?.value,
       end: document.querySelector("#tripEndDate")?.value,
       visibility: "trusted network only",
-      status: "New trip"
+      status: "New trip",
+      reason,
+      hiddenFrom
     };
     homeTrips.unshift(savedTrip);
     myTrips.push(savedTrip);
     activeHomeTripId = savedTrip.id;
   }
+}
+
+function selectedHiddenTripPeople() {
+  if (document.querySelector("[data-privacy-extra]")?.getAttribute("aria-pressed") !== "true") return [];
+  return [...document.querySelectorAll("[data-hidden-people-picker] button.selected")]
+    .map((button) => button.textContent.trim())
+    .filter(Boolean);
 }
 
 function selectedEditingTrip() {
@@ -386,6 +455,9 @@ function renderTripEditor() {
   const start = document.querySelector("#tripStartDate");
   const end = document.querySelector("#tripEndDate");
   const visibility = document.querySelector("#tripVisibility");
+  const reason = document.querySelector("#tripReason");
+  const privacyExtra = document.querySelector("[data-privacy-extra]");
+  const hiddenPicker = document.querySelector("[data-hidden-people-picker]");
   const saveButton = screen?.querySelector("[data-trip-save]");
   const skipButton = screen?.querySelector("[data-trip-skip]");
 
@@ -402,10 +474,30 @@ function renderTripEditor() {
     return;
   }
 
-  if (!isEditing || !trip) return;
+  if (!isEditing || !trip) {
+    if (destination) destination.value = "";
+    if (start) start.value = "";
+    if (end) end.value = "";
+    if (reason) reason.value = "";
+    if (privacyExtra) {
+      privacyExtra.classList.remove("active");
+      privacyExtra.setAttribute("aria-pressed", "false");
+    }
+    hiddenPicker?.querySelectorAll("button").forEach((button) => button.classList.remove("selected"));
+    return;
+  }
   if (destination) destination.value = [trip.city, trip.country].filter(Boolean).join(", ");
   if (start) start.value = trip.start || "";
   if (end) end.value = trip.end || "";
+  if (reason) reason.value = trip.reason || "";
+  if (privacyExtra) {
+    const hasHiddenPeople = Boolean(trip.hiddenFrom?.length);
+    privacyExtra.classList.toggle("active", hasHiddenPeople);
+    privacyExtra.setAttribute("aria-pressed", String(hasHiddenPeople));
+  }
+  hiddenPicker?.querySelectorAll("button").forEach((button) => {
+    button.classList.toggle("selected", Boolean(trip.hiddenFrom?.includes(button.textContent.trim())));
+  });
   if (visibility) {
     const normalized = (trip.visibility || "").toLowerCase();
     [...visibility.options].forEach((option) => {
@@ -423,12 +515,16 @@ function saveEditedTrip() {
   const { city, country } = parseTripDestination(destinationValue);
   const visibility = document.querySelector("#tripVisibility")?.value || trip.visibility;
   const openToMeetups = document.querySelector(".trip-card .toggle-card.active")?.textContent.includes("Open to Meetups");
+  const reason = document.querySelector("#tripReason")?.value.trim() || "";
+  const hiddenFrom = selectedHiddenTripPeople();
 
   trip.city = city;
   trip.country = country;
   trip.start = document.querySelector("#tripStartDate")?.value || trip.start;
   trip.end = document.querySelector("#tripEndDate")?.value || trip.end;
   trip.visibility = visibility.toLowerCase();
+  trip.reason = reason;
+  trip.hiddenFrom = hiddenFrom;
   if (openToMeetups) trip.status = trip.status === "past" ? "past" : "Open to meetups";
 
   const homeTrip = homeTrips.find((item) => item.id === trip.id);
@@ -437,6 +533,8 @@ function saveEditedTrip() {
     homeTrip.country = trip.country;
     homeTrip.start = trip.start;
     homeTrip.end = trip.end;
+    homeTrip.reason = trip.reason;
+    homeTrip.hiddenFrom = trip.hiddenFrom;
   }
 
   tripEditorMode = "create";
@@ -525,27 +623,7 @@ function planRelationshipLabel(plan) {
 }
 
 function planTrustState(plan) {
-  if (plan.mine || plan.host === "You" || plan.host === "Hugo" || plan.role === "hosting") {
-    return { active: true, locked: false, label: "Hosted by You", action: "Manage Plan" };
-  }
-  if (plan.role === "attending" || plan.role === "pending" || plan.role === "past" || ["accepted", "pending", "past"].includes(plan.viewerStatus)) {
-    return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Open" };
-  }
-  if (isTrustedConnection(plan.host) || isMetConnection(plan.host)) {
-    return { active: true, locked: false, label: isTrustedConnection(plan.host) ? "Trusted Host" : "Met Host", action: "Request to Join" };
-  }
-  if (isActiveTrustPath(plan.path, plan.host)) {
-    return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Request to Join" };
-  }
-  const oldPath = archivedPath(pathParts(plan.path).length ? [plan.path] : [], plan.host);
-  return {
-    active: false,
-    locked: true,
-    archived: true,
-    label: "Locked Path",
-    action: "Locked Path",
-    note: `Previously reachable${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""}. Reopen the trust path to request this plan.`
-  };
+  return TrustGraphEngine.getPlanTrustState(plan);
 }
 
 function homePlanCard(plan, index = 0) {
@@ -692,25 +770,7 @@ function suggestedConnectionScore(person) {
 }
 
 function suggestedConnections() {
-  const ranked = homePeople
-    .filter((person) => {
-      const state = connectionStateForPerson(person);
-      return !person.locked && !state?.locked && !state?.archived;
-    })
-    .map(suggestedConnectionScore)
-    .sort((a, b) => b.score - a.score);
-  const stable = ranked.slice(0, 2);
-  const rotatingPool = ranked.slice(2);
-  const daySeed = Math.floor(Date.now() / 86400000);
-  const rotated = rotatingPool.length
-    ? rotatingPool.slice(daySeed % rotatingPool.length).concat(rotatingPool.slice(0, daySeed % rotatingPool.length)).slice(0, 3)
-    : [];
-  return stable.concat(rotated).map(({ person, reason, reasons }) => ({
-    ...person,
-    suggestionReason: reason,
-    suggestionReasons: reasons,
-    cta: person.cta === "Explore" ? "Explore" : person.cta
-  }));
+  return TrustGraphEngine.getSuggestedConnections();
 }
 
 function suggestedLocationLine(person) {
@@ -732,11 +792,12 @@ function currentTrustedFriendCap() {
 function renderTrustCaps() {
   const slotCopy = document.querySelector("#trustedSlotCopy");
   if (slotCopy) {
-    slotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} used · max ${trustedFriendState.absoluteCap} · unlock more through verified meetups, hosting and trusted vouches.`;
+    const available = Math.max(0, trustedFriendState.launchCap - trustedFriendState.used);
+    slotCopy.textContent = `${available} of ${trustedFriendState.launchCap} slots available now · unlock up to ${trustedFriendState.absoluteCap} through verified meetups, vouches, and hosted plans.`;
   }
   const networkSlotCopy = document.querySelector("#networkTrustedSlotCopy");
   if (networkSlotCopy) {
-    networkSlotCopy.textContent = `${trustedFriendState.used}/${trustedFriendState.launchCap} launch slots used · cap ${trustedFriendState.absoluteCap}`;
+    networkSlotCopy.textContent = `${Math.max(0, trustedFriendState.launchCap - trustedFriendState.used)} slots available now · unlock up to ${trustedFriendState.absoluteCap}`;
   }
   const mapTrustedSlotCount = document.querySelector("#mapTrustedSlotCount");
   if (mapTrustedSlotCount) {
@@ -1108,11 +1169,7 @@ const clusterNetworks = {
 };
 
 function readPrototypeState() {
-  try {
-    return JSON.parse(window.localStorage.getItem(prototypeStorageKey) || "{}");
-  } catch {
-    return {};
-  }
+  return readStoredJson(prototypeStorageKey, {});
 }
 
 function mergeObject(target, source) {
@@ -1172,6 +1229,11 @@ function applyStoredPrototypeState() {
   if (typeof stored.activeHomeCity === "string") activeHomeCity = stored.activeHomeCity;
   if (typeof stored.activeHomeSelectorValue === "string") activeHomeSelectorValue = stored.activeHomeSelectorValue;
   if (typeof stored.homeFilter === "string") homeFilter = stored.homeFilter;
+  const storedProductTourCompleted = window.localStorage.getItem("productTourCompleted");
+  if (storedProductTourCompleted === "true") {
+    appState.productTourCompleted = true;
+    appState.productTourActive = false;
+  }
 }
 
 function persistPrototypeState() {
@@ -1199,11 +1261,7 @@ function persistPrototypeState() {
     activeHomeSelectorValue,
     homeFilter
   };
-  try {
-    window.localStorage.setItem(prototypeStorageKey, JSON.stringify(snapshot));
-  } catch {
-    // Local persistence is best-effort in the static prototype.
-  }
+  writeStoredJson(prototypeStorageKey, snapshot);
   updateNotificationBadges();
 }
 
@@ -1237,11 +1295,54 @@ function updateNotificationBadges() {
 function upsertNotification(item) {
   const existing = notificationItems.find((notification) => notification.id === item.id);
   if (existing) {
-    Object.assign(existing, item, { active: true });
+    Object.assign(existing, item, { active: true, cleared: false, viewed: false });
   } else {
-    notificationItems.unshift({ ...item, active: true });
+    notificationItems.unshift({ ...item, active: true, cleared: false, viewed: false });
   }
   appState.notificationsRead = false;
+}
+
+function notificationById(id) {
+  return notificationItems.find((notification) => notification.id === id);
+}
+
+function isActionableNotification(item) {
+  return Boolean(item?.active && (item.kind === "intro" || item.kind === "plan"));
+}
+
+function markNotificationCleared(id, status = "cleared") {
+  const item = notificationById(id);
+  if (!item) return false;
+  item.active = false;
+  item[status] = true;
+  if (!activeNotificationCount()) appState.notificationsRead = true;
+  persistPrototypeState();
+  renderNotifications();
+  return true;
+}
+
+function markNotificationViewedFromElement(element) {
+  const card = element?.closest?.("[data-notification-card]");
+  return card ? markNotificationCleared(card.dataset.notificationCard, "viewed") : false;
+}
+
+function clearNonCriticalNotifications() {
+  let cleared = 0;
+  let kept = 0;
+  notificationItems.forEach((item) => {
+    if (!item.active) return;
+    if (isActionableNotification(item)) {
+      kept += 1;
+      return;
+    }
+    item.active = false;
+    item.cleared = true;
+    cleared += 1;
+  });
+  if (!activeNotificationCount()) appState.notificationsRead = true;
+  persistPrototypeState();
+  renderNotifications();
+  return { cleared, kept };
 }
 
 function upsertConnectionRequest(group, request) {
@@ -1464,53 +1565,156 @@ function fallbackForScreen(id) {
   return backFallbacks[id] || "home";
 }
 
+const screenRenderers = {
+  "onboarding-intro": renderOnboardingCarousel,
+  home: () => {
+    renderHomePeople();
+    renderHomePlans();
+    renderHomeSuggestions();
+    renderNetworkMovement();
+  },
+  chats: renderChats,
+  "chat-detail": renderChatDetail,
+  "request-intro": () => renderIntroMethod(introMethod),
+  "nearby-people": renderNearbyPeoplePage,
+  "suggested-connections": renderSuggestedConnectionsPage,
+  "network-map": () => renderCityHub(query(".city-node.active")?.dataset.city || "Oslo"),
+  "all-trips": renderAllTrips,
+  trip: renderTripEditor,
+  "my-plans": renderMyPlans,
+  "person-trips": renderPersonTrips,
+  "person-plans": renderPersonPlans,
+  "plan-detail": renderPlanDetail,
+  "edit-plan": renderEditPlan,
+  "plan-chat": renderPlanChat,
+  "trusted-plans": renderTrustedPlans,
+  "connection-requests": renderConnectionRequests,
+  "plan-requests": renderPlanRequests,
+  settings: syncSettingsRows,
+  "settings-detail": renderSettingsDetail,
+  notifications: renderNotifications,
+  profile: renderProfile
+};
+
+function renderScreenContent(id) {
+  screenRenderers[id]?.();
+}
+
+const productTourSteps = [
+  {
+    screen: "home",
+    highlight: "#nearbyPeople",
+    title: "Suggested connections",
+    copy: "Suggested connections appear here as your trips and trusted network change."
+  },
+  {
+    screen: "network-map",
+    highlight: ".city-sky .cluster-card, .city-sky .map-bottom",
+    title: "City Hubs",
+    copy: "City Hubs show where your trusted network is active."
+  },
+  {
+    screen: "trusted-plans",
+    highlight: "#trustedPlansList",
+    title: "Trusted Plans",
+    copy: "Trusted Plans help you meet people through real-world context."
+  },
+  {
+    screen: "qr-reveal",
+    highlight: "#qr-reveal .identity-card",
+    title: "Personal Key",
+    copy: "Use your Personal Key to verify real-world meetups and strengthen trust."
+  }
+];
+
+function cleanupProductTour() {
+  document.querySelector(".app-tour-tip")?.remove();
+  document.querySelector(".product-tour-scrim")?.remove();
+  queryAll(".product-tour-focus").forEach((element) => element.classList.remove("product-tour-focus"));
+}
+
+function productTourCurrentStep() {
+  const stepIndex = Math.min(Math.max(appState.productTourStep || 0, 0), productTourSteps.length - 1);
+  return { step: productTourSteps[stepIndex], stepIndex };
+}
+
+function highlightProductTourTarget(step) {
+  const target = step.highlight.split(",").map((selector) => query(selector.trim())).find(Boolean);
+  target?.classList.add("product-tour-focus");
+}
+
+function renderProductTour() {
+  cleanupProductTour();
+  if (!appState.productTourActive || appState.productTourCompleted) return;
+  const { step, stepIndex } = productTourCurrentStep();
+  if (activeScreenId() !== step.screen) return;
+
+  const scrim = document.createElement("div");
+  scrim.className = "product-tour-scrim";
+  document.body.append(scrim);
+  highlightProductTourTarget(step);
+
+  const card = document.createElement("aside");
+  card.className = "app-tour-tip product-tour-tip";
+  card.innerHTML = `
+    <strong>${step.title}</strong>
+    <p>${step.copy}</p>
+    <div>
+      <button type="button" data-tour-dismiss>Dismiss</button>
+      <button type="button" data-tour-next>${stepIndex === productTourSteps.length - 1 ? "Done" : "Next"}</button>
+    </div>
+  `;
+  document.body.append(card);
+}
+
+function navigateProductTourStep() {
+  if (!appState.productTourActive || appState.productTourCompleted) return;
+  const { step } = productTourCurrentStep();
+  if (step.screen === "qr-reveal") renderQrRevealMode("home");
+  showScreen(step.screen, { replace: true, skipTour: true });
+  renderProductTour();
+}
+
+function startProductTour() {
+  window.localStorage.setItem("productTourCompleted", "false");
+  appState.productTourStep = 0;
+  appState.productTourActive = true;
+  appState.productTourCompleted = false;
+  appState.homeTourStep = 0;
+  appState.homeTourComplete = false;
+  persistPrototypeState();
+  navigateProductTourStep();
+}
+
+function completeProductTour() {
+  window.localStorage.setItem("productTourCompleted", "true");
+  appState.productTourActive = false;
+  appState.productTourCompleted = true;
+  appState.homeTourComplete = true;
+  cleanupProductTour();
+  persistPrototypeState();
+  showScreen("home", { replace: true });
+}
+
 function showScreen(id, options = {}) {
   const current = activeScreenId();
   if (!options.replace && current && current !== id) {
     screenHistory.push(current);
   }
   if (current === "verify" && id !== "verify") stopVerificationCountdown();
-  document.querySelector("#profileMenu")?.classList.remove("open");
+  query("#profileMenu")?.classList.remove("open");
   screens.forEach((screen) => screen.classList.toggle("active", screen.dataset.screen === id));
-  document.querySelectorAll(".bottom-nav").forEach(renderNav);
-  const active = document.querySelector(`[data-screen="${id}"] .scroll-area`);
+  queryAll(".bottom-nav").forEach(renderNav);
+  const active = query(`[data-screen="${id}"] .scroll-area`);
   if (active) active.scrollTop = 0;
-  if (id === "home") {
-    renderHomePeople();
-    renderHomePlans();
-    renderHomeSuggestions();
-    renderNetworkMovement();
-  }
-  if (id === "chats") renderChats();
-  if (id === "chat-detail") renderChatDetail();
-  if (id === "request-intro") renderIntroMethod(introMethod);
-  if (id === "nearby-people") renderNearbyPeoplePage();
-  if (id === "suggested-connections") renderSuggestedConnectionsPage();
-  if (id === "network-map") renderCityHub(document.querySelector(".city-node.active")?.dataset.city || "Oslo");
-  if (id === "all-trips") renderAllTrips();
-  if (id === "trip") renderTripEditor();
-  if (id === "my-plans") renderMyPlans();
-  if (id === "person-trips") renderPersonTrips();
-  if (id === "person-plans") renderPersonPlans();
-  if (id === "plan-detail") renderPlanDetail();
-  if (id === "edit-plan") renderEditPlan();
-  if (id === "plan-chat") renderPlanChat();
-  if (id === "trusted-plans") renderTrustedPlans();
-  if (id === "connection-requests") renderConnectionRequests();
-  if (id === "plan-requests") renderPlanRequests();
-  if (id === "settings") syncSettingsRows();
-  if (id === "settings-detail") renderSettingsDetail();
-  if (id === "notifications") renderNotifications();
-  if (id === "profile") renderProfile();
+  renderScreenContent(id);
   updateNotificationBadges();
   renderTrustCaps();
+  if (!options.skipTour) renderProductTour();
 }
 
 function confirmDiscardChanges(onDiscard) {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Discard changes">
       <strong>Discard changes?</strong>
       <p>Your draft will not be saved if you leave this screen.</p>
@@ -1519,25 +1723,17 @@ function confirmDiscardChanges(onDiscard) {
         <button type="button" data-discard-changes>Discard</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-keep-editing]") || event.target === dialog) {
-      dialog.remove();
-      return;
-    }
+  `, (event, dialog) => {
+    if (closeOnBackdropOr("[data-keep-editing]", event, dialog)) return;
     if (event.target.closest("[data-discard-changes]")) {
       dialog.remove();
       onDiscard();
     }
   });
-  document.body.append(dialog);
 }
 
 function confirmCancelHostedPlan() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Cancel plan">
       <strong>Cancel this plan?</strong>
       <p>This will permanently cancel the plan for all attendees. This action can't be undone.</p>
@@ -1546,26 +1742,18 @@ function confirmCancelHostedPlan() {
         <button type="button" data-confirm-cancel-plan>Cancel Plan</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-keep-plan]") || event.target === dialog) {
-      dialog.remove();
-      return;
-    }
+  `, (event, dialog) => {
+    if (closeOnBackdropOr("[data-keep-plan]", event, dialog)) return;
     if (event.target.closest("[data-confirm-cancel-plan]")) {
       dialog.remove();
       planFilter = "hosting";
       showScreen("my-plans", { replace: true });
     }
   });
-  document.body.append(dialog);
 }
 
 function confirmDeleteTrip(tripId) {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete trip">
       <strong>Delete this trip?</strong>
       <p>This will remove the trip from your profile and matching views.</p>
@@ -1574,12 +1762,8 @@ function confirmDeleteTrip(tripId) {
         <button type="button" data-confirm-delete-trip>Delete Trip</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-keep-trip]") || event.target === dialog) {
-      dialog.remove();
-      return;
-    }
+  `, (event, dialog) => {
+    if (closeOnBackdropOr("[data-keep-trip]", event, dialog)) return;
     if (event.target.closest("[data-confirm-delete-trip]")) {
       const tripIndex = myTrips.findIndex((trip) => trip.id === tripId);
       if (tripIndex >= 0) myTrips.splice(tripIndex, 1);
@@ -1595,16 +1779,12 @@ function confirmDeleteTrip(tripId) {
       showScreen("all-trips", { replace: true });
     }
   });
-  document.body.append(dialog);
 }
 
 function confirmRemoveConnection(name) {
   const profile = personProfiles[name];
   if (!profile) return;
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Remove connection">
       <strong>Remove from network?</strong>
       <p>This will remove this person as an active connection. Any network paths that depend on them may become locked, but your past chats, plans and meetup history will remain archived.</p>
@@ -1613,36 +1793,22 @@ function confirmRemoveConnection(name) {
         <button type="button" data-confirm-remove-connection>Remove</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-keep-connection]") || event.target === dialog) {
-      dialog.remove();
-      return;
-    }
+  `, (event, dialog) => {
+    if (closeOnBackdropOr("[data-keep-connection]", event, dialog)) return;
     if (event.target.closest("[data-confirm-remove-connection]")) {
-      removedConnections.add(name);
-      removeGraphFlag("trustedConnections", name);
-      removeGraphFlag("metConnections", name);
-      if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used > 0) trustedFriendState.used -= 1;
-      Object.values(chats).flat().forEach((chat) => {
-        if (chat.name === name || pathDependsOnRemoved(chat.path, chat.name)) chat.archived = true;
-      });
+      const result = removeTrustedFriend(name);
       dialog.remove();
-      showUtilityFeedback("Network path archived", `${profile.name.split(" ")[0]}'s active branch was removed. Dependent paths are now archived or locked until the path reopens.`);
+      showUtilityFeedback("Network path archived", `This is private to you. ${(result?.profile || profile).name.split(" ")[0]} is now shown as an archived path in your view, and dependent routes stay private until the path reopens.`);
       refreshTrustGraphViews();
     }
   });
-  document.body.append(dialog);
 }
 
 function confirmReconnection(name) {
   const profile = profileForName(name);
   if (!profile) return;
-  document.querySelector(".discard-dialog")?.remove();
   const firstName = profile.name.split(" ")[0];
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Request reconnection">
       <strong>Reconnect with ${firstName}?</strong>
       <p>You’re no longer actively connected, but you can request to reconnect. If ${firstName} accepts, your connection becomes active again and your shared network path reopens. Past chats, plans and meetup history remain preserved.</p>
@@ -1651,35 +1817,22 @@ function confirmReconnection(name) {
         <button type="button" data-send-reconnect>Send Request</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-cancel-reconnect]") || event.target === dialog) {
-      dialog.remove();
-      return;
-    }
+  `, (event, dialog) => {
+    if (closeOnBackdropOr("[data-cancel-reconnect]", event, dialog)) return;
     if (event.target.closest("[data-send-reconnect]")) {
-      removedConnections.delete([...removedConnections].find((removed) => nameKey(removed) === nameKey(name)) || name);
-      addGraphFlag("trustedConnections", name);
-      if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
-      Object.values(chats).flat().forEach((chat) => {
-        if (chat.name === name || pathParts(chat.path).some((part) => nameKey(part) === nameKey(name))) chat.archived = false;
-      });
+      const result = requestReconnection(name);
       dialog.remove();
-      showUtilityFeedback("Path reopened", `${firstName}'s trusted branch is active again. Dependent people, plans and city routes can reopen where the path is valid.`);
+      showUtilityFeedback("Path reopened", `${(result?.profile || profile).name.split(" ")[0]}'s trusted branch is active again. Dependent people, plans and city routes can reopen where the path is valid.`);
       refreshTrustGraphViews();
     }
   });
-  document.body.append(dialog);
 }
 
 function confirmTrustedUpgrade(name) {
   const profile = profileForName(name);
   if (!profile) return;
-  document.querySelector(".discard-dialog")?.remove();
   const firstName = profile.name.split(" ")[0];
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Upgrade trusted connection">
       <strong>Make ${firstName} a Trusted Friend?</strong>
       <p>This uses a Trusted Friend slot and opens ${firstName}'s wider network branch. You can remove this connection later without deleting past chats, plans or meetup history.</p>
@@ -1688,15 +1841,11 @@ function confirmTrustedUpgrade(name) {
         <button type="button" data-confirm-trust-upgrade="${profile.name}">Confirm Trusted Friend</button>
       </div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function showUtilityFeedback(title, body, actionLabel = "Done") {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="${title}">
       <strong>${title}</strong>
       <p>${body}</p>
@@ -1704,11 +1853,43 @@ function showUtilityFeedback(title, body, actionLabel = "Done") {
         <button type="button" data-dialog-close>${actionLabel}</button>
       </div>
     </div>
-  `;
-  dialog.addEventListener("click", (event) => {
-    if (event.target.closest("[data-dialog-close]") || event.target === dialog) dialog.remove();
+  `, (event, dialog) => {
+    closeOnBackdropOr("[data-dialog-close]", event, dialog);
   });
-  document.body.append(dialog);
+}
+
+function returnToShareOrigin() {
+  const target = chatReturnTarget || screenHistory.pop() || "home";
+  chatMode = "default";
+  showScreen(target, { replace: true });
+}
+
+function showShareCompleteDialog(type, recipient) {
+  pendingSharedRecipient = recipient || "Laura Chen";
+  const isPlanShare = type === "plan";
+  openDialog(`
+    <div class="discard-card" role="dialog" aria-modal="true" aria-label="${isPlanShare ? "Plan shared" : "Profile shared"}">
+      <strong>${isPlanShare ? "Plan shared" : "Profile shared"}</strong>
+      <p>${isPlanShare ? `${selectedPlanName} was shared with ${pendingSharedRecipient}.` : `${selectedProfileName}'s profile was shared with ${pendingSharedRecipient}.`}</p>
+      <div>
+        <button type="button" data-share-done>Done</button>
+        <button type="button" data-share-view-chat="${pendingSharedRecipient}">View Chat</button>
+      </div>
+    </div>
+  `, (event, dialog) => {
+    if (event.target.closest("[data-share-done]")) {
+      dialog.remove();
+      returnToShareOrigin();
+      return;
+    }
+    const viewChat = event.target.closest("[data-share-view-chat]");
+    if (viewChat) {
+      dialog.remove();
+      openDirectChatWith(viewChat.dataset.shareViewChat, {
+        preview: isPlanShare ? `You shared ${selectedPlanName}.` : `You shared ${selectedProfileName}'s profile.`
+      });
+    }
+  });
 }
 
 function syncSettingsRows() {
@@ -1779,7 +1960,7 @@ function renderNotifications() {
       };
       actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
     }
-    return `<article class="notification-card" data-notification-card="${item.id}"><span>${item.title}</span><strong>${item.body}</strong>${actions}</article>`;
+    return `<article class="notification-card" data-notification-card="${item.id}"><button class="notification-swipe-clear" type="button" data-clear-notification="${item.id}" aria-label="Clear notification">Clear</button><div class="notification-swipe-content"><span>${item.title}</span><strong>${item.body}</strong>${actions}</div></article>`;
   }).join("") : emptyState("No notifications yet", "Intro requests, plan updates and trip overlaps will appear here.", `<button type="button" class="soft-action" data-settings-detail="developer">Generate test activity</button>`);
   updateNotificationBadges();
 }
@@ -1849,7 +2030,7 @@ function renderSettingsDetail() {
     developer: {
       title: "Developer Mode",
       copy: "Internal testing tools. This will be removed before launch.",
-      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-chat">Generate Plan Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="trip-overlap">Generate Trip Overlap</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="empty-states">Show Empty States</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
+      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-chat">Generate Plan Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="trip-overlap">Generate Trip Overlap</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="empty-states">Show Empty States</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset-product-tour">Reset product tour</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
     }
   };
   const page = pages[detail] || pages.phone;
@@ -1861,10 +2042,7 @@ function renderSettingsDetail() {
 function openPrivacySelector(key) {
   const setting = privacyOptions[key];
   if (!setting) return;
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card settings-selector-card" role="dialog" aria-modal="true" aria-label="${setting.title}">
       <h2>${setting.title}</h2>
       <div class="select-group single-select">
@@ -1872,29 +2050,21 @@ function openPrivacySelector(key) {
       </div>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-save-privacy-setting="${key}">Save</button></div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function confirmDeleteAccountStepOne() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete account">
       <strong>Delete your account?</strong>
       <p>This action cannot be undone.</p>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-delete-account-final-step>Continue</button></div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function confirmDeleteAccountFinal() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Final delete account confirmation">
       <strong>Final confirmation</strong>
       <p>Deleting removes your account from this prototype flow. Type DELETE to confirm this destructive action.</p>
@@ -1902,8 +2072,7 @@ function confirmDeleteAccountFinal() {
       <small id="deleteConfirmError" class="modal-error" aria-live="polite"></small>
       <div><button type="button" data-dialog-close>Keep Account</button><button type="button" data-confirm-delete-account>Delete Account</button></div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function openSafetyAction(label = "") {
@@ -1942,13 +2111,10 @@ function openSafetyAction(label = "") {
 }
 
 function showSafetyModal({ title, body, placeholder, action, type }) {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
   const inputTag = type === "block"
     ? `<input id="safetyActionInput" class="modal-input" placeholder="${placeholder}" />`
     : `<textarea id="safetyActionInput" placeholder="${placeholder}"></textarea>`;
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="${title}">
       <h2>${title}</h2>
       <p>${body}</p>
@@ -1956,8 +2122,7 @@ function showSafetyModal({ title, body, placeholder, action, type }) {
       <small id="safetyActionError" class="modal-error" aria-live="polite"></small>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-submit-safety-action="${type}">${action}</button></div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function submitSafetyAction(type) {
@@ -1970,7 +2135,7 @@ function submitSafetyAction(type) {
   }
   if (type === "report") {
     settingsState.reportHistory.unshift(`User report · ${value.slice(0, 42)}`);
-    document.querySelector(".discard-dialog")?.remove();
+    closeActiveDialog();
     syncSettingsRows();
     persistPrototypeState();
     showUtilityFeedback("Report submitted", "Your report was recorded locally for prototype testing.");
@@ -1978,7 +2143,7 @@ function submitSafetyAction(type) {
   }
   if (type === "block") {
     if (!settingsState.blockedUsers.includes(value)) settingsState.blockedUsers.unshift(value);
-    document.querySelector(".discard-dialog")?.remove();
+    closeActiveDialog();
     syncSettingsRows();
     persistPrototypeState();
     showUtilityFeedback("User blocked", `${value} has been added to blocked users.`);
@@ -1986,7 +2151,7 @@ function submitSafetyAction(type) {
   }
   if (type === "contact") {
     settingsState.reportHistory.unshift(`Support note · ${value.slice(0, 42)}`);
-    document.querySelector(".discard-dialog")?.remove();
+    closeActiveDialog();
     syncSettingsRows();
     persistPrototypeState();
     showUtilityFeedback("Message sent", "Your note was saved locally for prototype testing.");
@@ -1994,10 +2159,7 @@ function submitSafetyAction(type) {
 }
 
 function openFeedbackForm() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card feedback-card" role="dialog" aria-modal="true" aria-label="Send feedback">
       <h2>Send Feedback</h2>
       <p>This helps make 6dgrs clearer for friends and family testers.</p>
@@ -2009,8 +2171,7 @@ function openFeedbackForm() {
       <small id="feedbackError" class="modal-error" aria-live="polite"></small>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-submit-feedback>Save Feedback</button></div>
     </div>
-  `;
-  document.body.append(dialog);
+  `);
 }
 
 function submitFeedback() {
@@ -2028,7 +2189,7 @@ function submitFeedback() {
   appState.feedback = Array.isArray(appState.feedback) ? appState.feedback : [];
   appState.feedback.unshift(feedback);
   persistPrototypeState();
-  document.querySelector(".discard-dialog")?.remove();
+  closeActiveDialog();
   showUtilityFeedback("Thank you", "Your feedback was saved locally in this prototype.");
 }
 
@@ -2056,7 +2217,7 @@ function goBack() {
 
 function ensureBackButtons() {
   screens.forEach((screen) => {
-    if (rootScreens.has(screen.dataset.screen) || screen.querySelector(".screen-back-button")) return;
+    if (screen.dataset.screen === "onboarding-intro" || rootScreens.has(screen.dataset.screen) || screen.querySelector(".screen-back-button")) return;
     const existingBack = [...screen.querySelectorAll("button")]
       .find((button) => button.textContent.trim().toLowerCase() === "back");
     if (existingBack) {
@@ -2229,17 +2390,95 @@ function displayTrustPath(path = "") {
   return pathParts(path).join(" → ") || path;
 }
 
-function connectionStateForProfile(profile) {
-  const paths = profile.paths || (pathParts(profile.path).length ? [profile.path] : []);
-  const isTrusted = isTrustedConnection(profile.name);
-  const isMet = !isTrusted && isMetConnection(profile.name);
-  const directRelationship = isTrusted ? "Trusted Friend" : isMet ? "Met" : (profile.directRelationship || (["Trusted Friend", "Met"].includes(profile.relationship) ? profile.relationship : ""));
-  const removedSelf = isRemovedName(profile.name);
-  const livePath = activePath(paths, profile.name);
-  const oldPath = archivedPath(paths, profile.name);
-  const removedVia = viaName(oldPath);
+const TrustGraphEngine = {
+  resolveSubject(userId, options = {}) {
+    if (options.profile) return { name: options.profile.name, profile: options.profile, person: null };
+    if (options.person) return { name: options.person.name, profile: personProfiles[options.person.name], person: options.person };
+    if (typeof userId === "object" && userId?.name) {
+      return { name: userId.name, profile: personProfiles[userId.name], person: userId };
+    }
+    const name = canonicalPersonName(String(userId || selectedProfileName || ""));
+    return { name, profile: personProfiles[name], person: null };
+  },
 
-  if (removedSelf) {
+  subjectPaths(subject) {
+    const source = subject.profile || subject.person || {};
+    if (Array.isArray(source.paths)) return source.paths;
+    return pathParts(source.path).length ? [source.path] : [];
+  },
+
+  getTrustPath(userId, options = {}) {
+    const subject = this.resolveSubject(userId, options);
+    const paths = this.subjectPaths(subject);
+    const active = activePath(paths, subject.name);
+    const archived = archivedPath(paths, subject.name);
+    return {
+      paths,
+      active,
+      archived,
+      via: viaName(active || archived),
+      display: displayTrustPath(active || archived)
+    };
+  },
+
+  isPathActive(userId, path = "", options = {}) {
+    const subject = this.resolveSubject(userId, options);
+    return path ? isActiveTrustPath(path, subject.name) : Boolean(this.getTrustPath(userId, options).active);
+  },
+
+  getRelationshipState(userId, options = {}) {
+    const subject = this.resolveSubject(userId, options);
+    const { name, profile, person } = subject;
+    if (!name) return null;
+    if (profile) return this.profileRelationshipState(profile);
+    return this.personRelationshipState(person || { name });
+  },
+
+  profileRelationshipState(profile) {
+    const paths = this.subjectPaths({ profile });
+    const isTrusted = isTrustedConnection(profile.name);
+    const isMet = !isTrusted && isMetConnection(profile.name);
+    const directRelationship = isTrusted ? "Trusted Friend" : isMet ? "Met" : (profile.directRelationship || (["Trusted Friend", "Met"].includes(profile.relationship) ? profile.relationship : ""));
+    const removedSelf = isRemovedName(profile.name);
+    const livePath = activePath(paths, profile.name);
+    const oldPath = archivedPath(paths, profile.name);
+    const removedVia = viaName(oldPath);
+
+    if (removedSelf) {
+      return {
+        state: "archived",
+        relationship: "Archived Path",
+        path: `Previously connected${removedVia ? ` via ${removedVia}` : ""}`,
+        canRemove: false,
+        removeLabel: "",
+        archived: true,
+        locked: false,
+        action: "Request Reconnection"
+      };
+    }
+    if (directRelationship) {
+      return {
+        state: "direct",
+        relationship: directRelationship,
+        path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · wider network stays locked until Trusted Friend",
+        canRemove: true,
+        removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
+        locked: false,
+        action: directRelationship === "Trusted Friend" ? "Message" : "Request Trusted Connection"
+      };
+    }
+    if (livePath) {
+      const via = viaName(livePath);
+      return {
+        state: "active-path",
+        relationship: via ? `Connected via ${via}` : profile.relationship,
+        path: displayTrustPath(livePath),
+        canRemove: true,
+        removeLabel: "Remove from Network",
+        locked: false,
+        action: profile.action || "Request Intro"
+      };
+    }
     return {
       state: "archived",
       relationship: "Archived Path",
@@ -2247,89 +2486,248 @@ function connectionStateForProfile(profile) {
       canRemove: false,
       removeLabel: "",
       archived: true,
-      locked: false,
-      action: "Request Reconnection"
-    };
-  }
-  if (directRelationship) {
-    return {
-      state: "direct",
-      relationship: directRelationship,
-      path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · wider network stays locked until Trusted Friend",
-      canRemove: true,
-      removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
-      locked: false,
-      action: directRelationship === "Trusted Friend" ? "Message" : "Request Trusted Connection"
-    };
-  }
-  if (livePath) {
-    const via = viaName(livePath);
-    return {
-      state: "active-path",
-      relationship: via ? `Connected via ${via}` : profile.relationship,
-      path: displayTrustPath(livePath),
-      canRemove: true,
-      removeLabel: "Remove from Network",
-      locked: false,
-      action: profile.action || "Request Intro"
-    };
-  }
-  return {
-    state: "archived",
-    relationship: "Archived Path",
-    path: `Previously connected${removedVia ? ` via ${removedVia}` : ""}`,
-    canRemove: false,
-    removeLabel: "",
-    archived: true,
-    locked: true,
-    action: "Request Reconnection"
-  };
-}
-
-function connectionStateForPerson(person) {
-  const profile = personProfiles[person.name];
-  if (profile) return connectionStateForProfile(profile);
-  const paths = pathParts(person.path).length ? [person.path] : [];
-  if (isTrustedConnection(person.name)) {
-    return {
-      state: "direct",
-      relationship: "Trusted Friend",
-      path: "Direct trusted connection",
-      locked: false,
-      action: "Message"
-    };
-  }
-  if (isMetConnection(person.name) || person.met) {
-    return {
-      state: "met",
-      relationship: "Met",
-      path: "Met in person · network remains locked until Trusted Friend",
-      locked: false,
-      action: "Request Trusted Connection"
-    };
-  }
-  if (paths.length && !activePath(paths, person.name)) {
-    const oldPath = archivedPath(paths, person.name);
-    return {
-      relationship: "Archived Path",
-      path: `Previously connected${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""} · No active trust path`,
-      archived: true,
       locked: true,
       action: "Request Reconnection"
     };
-  }
-  if (paths.length) {
-    const livePath = activePath(paths, person.name);
-    const via = viaName(livePath);
+  },
+
+  personRelationshipState(person = {}) {
+    if (isTrustedConnection(person.name)) {
+      return {
+        state: "direct",
+        relationship: "Trusted Friend",
+        path: "Direct trusted connection",
+        locked: false,
+        action: "Message"
+      };
+    }
+    if (isMetConnection(person.name) || person.met) {
+      return {
+        state: "met",
+        relationship: "Met",
+        path: "Met in person · network remains locked until Trusted Friend",
+        locked: false,
+        action: "Request Trusted Connection"
+      };
+    }
+    const paths = this.subjectPaths({ person });
+    if (paths.length && !activePath(paths, person.name)) {
+      const oldPath = archivedPath(paths, person.name);
+      return {
+        relationship: "Archived Path",
+        path: `Previously connected${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""} · No active trust path`,
+        archived: true,
+        locked: true,
+        action: "Request Reconnection"
+      };
+    }
+    if (paths.length) {
+      const livePath = activePath(paths, person.name);
+      const via = viaName(livePath);
+      return {
+        relationship: via ? `Connected via ${via}` : person.badge,
+        path: displayTrustPath(livePath),
+        archived: false,
+        locked: false,
+        action: person.cta || "Request Intro"
+      };
+    }
+    return null;
+  },
+
+  getPlanTrustState(plan = {}) {
+    if (plan.mine || plan.host === "You" || plan.host === "Hugo" || plan.role === "hosting") {
+      return { active: true, locked: false, label: "Hosted by You", action: "Manage Plan" };
+    }
+    if (plan.role === "attending" || plan.role === "pending" || plan.role === "past" || ["accepted", "pending", "past"].includes(plan.viewerStatus)) {
+      return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Open" };
+    }
+    if (isTrustedConnection(plan.host) || isMetConnection(plan.host)) {
+      return { active: true, locked: false, label: isTrustedConnection(plan.host) ? "Trusted Host" : "Met Host", action: "Request to Join" };
+    }
+    if (this.isPathActive(plan.host, plan.path)) {
+      return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Request to Join" };
+    }
+    const oldPath = archivedPath(pathParts(plan.path).length ? [plan.path] : [], plan.host);
     return {
-      relationship: via ? `Connected via ${via}` : person.badge,
-      path: displayTrustPath(livePath),
-      archived: false,
-      locked: false,
-      action: person.cta || "Request Intro"
+      active: false,
+      locked: true,
+      archived: true,
+      label: "Locked Path",
+      action: "Locked Path",
+      note: `Previously reachable${viaName(oldPath) ? ` via ${viaName(oldPath)}` : ""}. Reopen the trust path to request this plan.`
+    };
+  },
+
+  getVisibleConnections(city = "Oslo") {
+    return cityGraphPeople(city).filter(({ state }) => !state.locked && !state.archived);
+  },
+
+  getLockedBranches(userId, city = "") {
+    const rootKey = nameKey(this.resolveSubject(userId).name || userId);
+    const people = city ? cityGraphPeople(city) : ["Oslo", "Barcelona", "London", "Lisbon", "Tokyo", "Paris"].flatMap((hub) => cityGraphPeople(hub));
+    const seen = new Set();
+    return people
+      .filter(({ person, state }) => (state.locked || state.archived) && !seen.has(nameKey(person.name)) && seen.add(nameKey(person.name)))
+      .filter(({ person }) => pathParts(person.path || profileForName(person.name)?.path || "").some((part) => nameKey(part) === rootKey));
+  },
+
+  getBranchPeople(userId, city = "") {
+    const rootKey = nameKey(this.resolveSubject(userId).name || userId);
+    return cityGraphPeople(city)
+      .filter(({ person }) => nameKey(person.name) !== rootKey)
+      .filter(({ person }) => pathParts(person.path || profileForName(person.name)?.path || "").some((part) => nameKey(part) === rootKey))
+      .slice(0, 3);
+  },
+
+  removeTrustedFriend(userId) {
+    const subject = this.resolveSubject(userId);
+    const profile = subject.profile || profileForName(subject.name);
+    if (!profile) return null;
+    removedConnections.add(profile.name);
+    removeGraphFlag("trustedConnections", profile.name);
+    removeGraphFlag("metConnections", profile.name);
+    if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used > 0) trustedFriendState.used -= 1;
+    Object.values(chats).flat().forEach((chat) => {
+      if (chat.name === profile.name || pathDependsOnRemoved(chat.path, chat.name)) chat.archived = true;
+    });
+    return { profile, state: this.getRelationshipState(profile.name) };
+  },
+
+  requestReconnection(userId) {
+    const subject = this.resolveSubject(userId);
+    const profile = subject.profile || profileForName(subject.name);
+    if (!profile) return null;
+    removedConnections.delete([...removedConnections].find((removed) => nameKey(removed) === nameKey(profile.name)) || profile.name);
+    addGraphFlag("trustedConnections", profile.name);
+    if ((profile.directRelationship === "Trusted Friend" || profile.relationship === "Trusted Friend") && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+    Object.values(chats).flat().forEach((chat) => {
+      if (chat.name === profile.name || pathParts(chat.path).some((part) => nameKey(part) === nameKey(profile.name))) chat.archived = false;
+    });
+    return { profile, state: this.getRelationshipState(profile.name) };
+  },
+
+  confirmMeetup(userId, method = verificationMethod) {
+    const subject = this.resolveSubject(userId);
+    const name = subject.name || "Emma Laurent";
+    instagramAccessUnlocked = true;
+    trustedFriendState.verifiedMeetups += 1;
+    appState.confirmedMeetups = Array.isArray(appState.confirmedMeetups) ? appState.confirmedMeetups : [];
+    addGraphFlag("metConnections", name);
+    appState.confirmedMeetups.unshift({
+      person: name,
+      method,
+      confirmedAt: new Date().toISOString()
+    });
+    return { name, state: this.getRelationshipState(name) };
+  },
+
+  promoteToTrusted(userId, options = {}) {
+    const subject = this.resolveSubject(userId);
+    const name = subject.name;
+    if (!name) return null;
+    addGraphFlag("trustedConnections", name);
+    removeGraphFlag("metConnections", name);
+    if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+    if (options.notify) addNotificationEvent("acceptedIntro");
+    return { name, state: this.getRelationshipState(name) };
+  },
+
+  getSuggestedConnections() {
+    const ranked = homePeople
+      .filter((person) => {
+        const state = this.getRelationshipState(person.name, { person });
+        return !person.locked && !state?.locked && !state?.archived;
+      })
+      .map(suggestedConnectionScore)
+      .sort((a, b) => b.score - a.score);
+    const stable = ranked.slice(0, 2);
+    const rotatingPool = ranked.slice(2);
+    const daySeed = Math.floor(Date.now() / 86400000);
+    const rotated = rotatingPool.length
+      ? rotatingPool.slice(daySeed % rotatingPool.length).concat(rotatingPool.slice(0, daySeed % rotatingPool.length)).slice(0, 3)
+      : [];
+    return stable.concat(rotated).map(({ person, reason, reasons }) => ({
+      ...person,
+      suggestionReason: reason,
+      suggestionReasons: reasons,
+      cta: person.cta === "Explore" ? "Explore" : person.cta
+    }));
+  },
+
+  getEligiblePlans(plans = discoverablePlans) {
+    return plans
+      .map((plan) => ({ plan, trustState: this.getPlanTrustState(plan) }))
+      .filter(({ trustState }) => trustState.active || trustState.locked);
+  },
+
+  getIntroPath(targetUserId) {
+    const profile = profileForName(targetUserId) || selectedProfile();
+    const trustPath = this.getTrustPath(profile.name, { profile });
+    const parts = pathParts(trustPath.active || trustPath.archived || profile.path);
+    return {
+      ...trustPath,
+      target: profile.name,
+      via: parts.length >= 3 ? parts[1] : trustPath.via || "Laura",
+      active: Boolean(trustPath.active)
     };
   }
-  return null;
+};
+
+function getRelationshipState(userId) {
+  return TrustGraphEngine.getRelationshipState(userId);
+}
+
+function getTrustPath(userId) {
+  return TrustGraphEngine.getTrustPath(userId);
+}
+
+function isPathActive(userId) {
+  return TrustGraphEngine.isPathActive(userId);
+}
+
+function getVisibleConnections(city) {
+  return TrustGraphEngine.getVisibleConnections(city);
+}
+
+function getLockedBranches(userId) {
+  return TrustGraphEngine.getLockedBranches(userId);
+}
+
+function removeTrustedFriend(userId) {
+  return TrustGraphEngine.removeTrustedFriend(userId);
+}
+
+function requestReconnection(userId) {
+  return TrustGraphEngine.requestReconnection(userId);
+}
+
+function confirmMeetup(userId) {
+  return TrustGraphEngine.confirmMeetup(userId);
+}
+
+function promoteToTrusted(userId) {
+  return TrustGraphEngine.promoteToTrusted(userId);
+}
+
+function getSuggestedConnections() {
+  return TrustGraphEngine.getSuggestedConnections();
+}
+
+function getEligiblePlans() {
+  return TrustGraphEngine.getEligiblePlans();
+}
+
+function getIntroPath(targetUserId) {
+  return TrustGraphEngine.getIntroPath(targetUserId);
+}
+
+function connectionStateForProfile(profile) {
+  return TrustGraphEngine.getRelationshipState(profile.name, { profile });
+}
+
+function connectionStateForPerson(person) {
+  return TrustGraphEngine.getRelationshipState(person.name, { person });
 }
 
 function refreshTrustGraphViews() {
@@ -2463,11 +2861,11 @@ function renderTrustedMode(mode = "onboarding") {
   const cta = document.querySelector("#trustedCta");
   if (!instruction || !cta) return;
   if (mode === "add-friends") {
-    instruction.textContent = "Add Trusted Friends intentionally. Slots are limited and wider networks unlock only for 1st Degree relationships.";
+    instruction.textContent = "Add Trusted Friends intentionally. Start with 6 slots and unlock up to 12 through verified trust activity.";
     cta.textContent = "Done";
     cta.dataset.next = "network-list";
   } else {
-    instruction.textContent = "Add up to 6 Trusted Friends to start your network.";
+    instruction.textContent = "Start with 6 Trusted Friends. Unlock up to 12 as real-world trust grows.";
     cta.textContent = "Continue";
     cta.dataset.next = "privacy";
   }
@@ -2609,7 +3007,7 @@ function planShareComposer() {
       <div class="share-send-box">
         <label>Send to<select><option>Laura Chen</option><option>Theo Jensen</option><option>Amara Okoye</option></select></label>
         <label>Message<textarea placeholder="Thought you might like this trusted plan."></textarea></label>
-        <button class="primary-button" type="button">Send Plan</button>
+        <div class="share-send-actions"><button class="secondary-button" type="button" data-share-cancel>Cancel</button><button class="primary-button" type="button" data-share-plan-send>Send Plan</button></div>
       </div>
     </section>
   `;
@@ -2879,13 +3277,12 @@ function renderPlanChat() {
 function renderHomePlans() {
   const list = document.querySelector("#homePlans");
   if (!list) return;
-  const plans = discoverablePlans.filter((plan) => (
+  const plans = getEligiblePlans(discoverablePlans).filter(({ trustState }) => trustState.active).map(({ plan }) => plan).filter((plan) => (
     !plan.mine &&
     plan.role !== "attending" &&
     plan.role !== "pending" &&
     plan.viewerStatus === "discoverable" &&
-    plan.joined < Math.min(plan.max, 6) &&
-    planTrustState(plan).active
+    plan.joined < Math.min(plan.max, 6)
   ));
   list.innerHTML = plans.length
     ? plans.slice(0, 4).map(homePlanCard).join("")
@@ -2895,7 +3292,7 @@ function renderHomePlans() {
 function renderTrustedPlans() {
   const list = document.querySelector("#trustedPlansList");
   if (!list) return;
-  const plans = discoverablePlans.filter((plan) => planTrustState(plan).active || planTrustState(plan).locked);
+  const plans = getEligiblePlans(discoverablePlans).map(({ plan }) => plan);
   list.innerHTML = plans.length
     ? plans.map((plan, index) => planCard(plan, index)).join("")
     : emptyState("No trusted plans nearby", "Plans you can request to join will appear here as your network becomes active.", `<button type="button" class="soft-action" data-next="create-plan">Host one</button>`);
@@ -3018,6 +3415,7 @@ function tripCard(trip, manageable = false) {
       <strong>${trip.city}</strong>
       <span class="trip-country">${trip.country}</span>
       <span class="trip-dates">${displayTripRange(trip)}</span>
+      ${trip.reason ? `<span class="trip-context">Here for: ${trip.reason}</span>` : ""}
       <span class="trust-badge">${trip.visibility}</span>
       ${trip.status ? `<span class="trust-badge trip-status">${trip.status}</span>` : ""}
       ${manageable ? tripManagementActions(trip) : ""}
@@ -3031,6 +3429,7 @@ function pastTripCard(trip, manageable = false) {
       <strong>${trip.city}</strong>
       <span>${trip.country}</span>
       <em>${displayTripRange(trip)}</em>
+      ${trip.reason ? `<span class="trip-context">Here for: ${trip.reason}</span>` : ""}
       <small>Past</small>
     </article>
   `;
@@ -3054,7 +3453,7 @@ function requestCard(request, index = 0, group = requestFilter) {
   const status = (request.status || "").toLowerCase();
   const trustState = connectionStateForPerson({ name: request.name, path: request.path, badge: request.type, cta: "Request Intro" });
   const pathLocked = Boolean(trustState?.locked);
-  const reconnectTarget = viaName(archivedPath(pathParts(request.path).length ? [request.path] : [], request.name)) || request.name;
+  const reconnectTarget = TrustGraphEngine.getTrustPath(request.name, { person: request }).via || request.name;
   const isNew = request.actions || status.includes("new") || status.includes("waiting for you");
   const isAccepted = status.includes("accepted") || status.includes("chat open") || status.includes("added");
   const isDeclined = status.includes("declined");
@@ -3115,7 +3514,7 @@ function renderPlanRequests() {
   list.innerHTML = planJoinRequests.map((request, index) => {
     const trustState = connectionStateForPerson({ name: request.name, path: request.path, badge: request.vouch });
     const locked = Boolean(trustState?.locked);
-    const reconnectTarget = viaName(archivedPath(pathParts(request.path).length ? [request.path] : [], request.name)) || request.name;
+    const reconnectTarget = TrustGraphEngine.getTrustPath(request.name, { person: request }).via || request.name;
     return `
       <article class="request-card plan-request ${locked ? "locked-relation" : ""}">
         <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
@@ -3372,8 +3771,8 @@ function renderChats() {
       : (chats[chatFilter] || [])
         .filter((chat) => !chat.archived && !pathDependsOnRemoved(chat.path, chat.name))
         .filter((chat) => !chat.introRequest || appState.pendingIntroRequestActive);
-  if (headerTitle) headerTitle.textContent = chatMode === "plan-share" ? "Share Plan" : "Chats";
-  if (tabs) tabs.hidden = chatMode === "plan-share";
+  if (headerTitle) headerTitle.textContent = chatMode === "plan-share" ? "Share Plan" : chatMode === "share" ? "Share Profile" : "Chats";
+  if (tabs) tabs.hidden = chatMode === "plan-share" || chatMode === "share";
   if (headerCopy) {
     if (chatMode === "plan-share") {
       headerCopy.textContent = "Send this trusted plan to someone in your circle.";
@@ -3387,11 +3786,27 @@ function renderChats() {
       headerCopy.textContent = "Trusted conversations only.";
     }
   }
+  const shareCancel = chatMode === "share" ? `<div class="share-flow-actions"><button type="button" class="small-pill quiet-pill" data-share-cancel>Cancel</button></div>` : "";
   list.innerHTML = chatMode === "plan-share"
     ? planShareComposer()
     : source.length
-      ? source.map((chat, index) => chatCard(chat, index, chatMode)).join("")
+      ? `${shareCancel}${source.map((chat, index) => chatCard(chat, index, chatMode)).join("")}`
       : emptyState(chatFilter === "archived" ? "No archived chats" : chatFilter === "plans" ? "No plan chats" : "No chats yet", chatFilter === "archived" ? "Conversations you archive will remain available here for history." : chatFilter === "plans" ? "Plan chats will appear when you host or join a plan." : "Trusted conversations, intro chats and direct messages will appear here.");
+}
+
+function chatHeaderMarkup(title, subtitle, modifier = "direct-chat-top") {
+  return `<header class="chat-top ${modifier}"><div class="avatar-img"></div><div><strong>${title}</strong><span>${subtitle}</span></div></header>`;
+}
+
+function chatComposerMarkup(placeholder) {
+  return `<div class="composer"><input placeholder="${placeholder}" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>`;
+}
+
+function compactChatActionsMarkup(profileName, options = {}) {
+  const actions = [`<button data-next="profile" data-profile-name="${profileName}">Profile</button>`];
+  if (options.includeTrips !== false) actions.push(`<button data-next="person-trips" data-profile-name="${profileName}">Trips</button>`);
+  if (options.includePlans !== false) actions.push(`<button data-next="person-plans" data-profile-name="${profileName}">Plans</button>`);
+  return `<div class="direct-chat-actions compact-chat-actions ${options.className || ""}">${actions.join("")}</div>`;
 }
 
 function renderChatDetail() {
@@ -3404,7 +3819,7 @@ function renderChatDetail() {
 
   if (activeChatDetailMode === "archived_chat") {
     screen.innerHTML = `
-      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>Archived conversation · history preserved</span></div></header>
+      ${chatHeaderMarkup(chatName, "Archived conversation · history preserved")}
       <div class="messages">
         <p class="bubble theirs">${chatPreview}</p>
         <p class="bubble mine">Archived path only. Past chats, plans and meetup history remain available.</p>
@@ -3416,13 +3831,8 @@ function renderChatDetail() {
 
   if (activeChatDetailMode === "intro-request" || activeChatDetailMode === "intro_request") {
     screen.innerHTML = `
-      <header class="chat-top direct-chat-top">
-        <div class="avatar-img"></div>
-        <div><strong>Intro Request</strong><span>Hugo → Emma via Laura</span></div>
-      </header>
-      <div class="direct-chat-actions compact-chat-actions intro-request-compact-actions">
-        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
-      </div>
+      ${chatHeaderMarkup("Intro Request", "Hugo → Emma via Laura")}
+      ${compactChatActionsMarkup("Emma Laurent", { includeTrips: false, includePlans: false, className: "intro-request-compact-actions" })}
       <div class="messages">
         <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.</p>
         <div class="intro-request-actions chat-detail-intro-actions">
@@ -3431,22 +3841,20 @@ function renderChatDetail() {
           <button class="text-mini" type="button" data-intro-soft-decline>Not right now</button>
         </div>
       </div>
-      <div class="composer"><input placeholder="Happy to intro - what are you hoping to connect on?" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+      ${chatComposerMarkup("Happy to intro - what are you hoping to connect on?")}
     `;
     return;
   }
 
   if (activeChatDetailMode === "intro-reply") {
     screen.innerHTML = `
-      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>Hugo</strong><span>Intro request clarification</span></div></header>
-      <div class="direct-chat-actions compact-chat-actions intro-request-compact-actions">
-        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
-      </div>
+      ${chatHeaderMarkup("Hugo", "Intro request clarification")}
+      ${compactChatActionsMarkup("Emma Laurent", { includeTrips: false, includePlans: false, className: "intro-request-compact-actions" })}
       <div class="messages">
         <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right.</p>
         <p class="bubble mine">Happy to intro - what are you hoping to connect on?</p>
       </div>
-      <div class="composer"><input placeholder="Message Hugo" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+      ${chatComposerMarkup("Message Hugo")}
     `;
     return;
   }
@@ -3457,15 +3865,8 @@ function renderChatDetail() {
       ? `<div class="intro-chat-footer-actions"><button type="button">Mute Chat</button><button type="button" data-leave-intro-chat>Leave Chat</button></div>`
       : "";
     screen.innerHTML = `
-      <header class="chat-top intro-chat-top">
-        <div class="avatar-img"></div>
-        <div><strong>Hugo & Emma</strong><span>Introduced by Laura</span></div>
-      </header>
-      <div class="direct-chat-actions compact-chat-actions">
-        <button data-next="profile" data-profile-name="Emma Laurent">Profile</button>
-        <button data-next="person-trips" data-profile-name="Emma Laurent">Trips</button>
-        <button data-next="person-plans" data-profile-name="Emma Laurent">Plans</button>
-      </div>
+      ${chatHeaderMarkup("Hugo & Emma", "Introduced by Laura", "intro-chat-top")}
+      ${compactChatActionsMarkup("Emma Laurent")}
       <div class="messages">
         <p class="bubble theirs">Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel.</p>
         <p class="bubble mine">Thank you Laura. Emma, lovely to meet you here.</p>
@@ -3473,128 +3874,96 @@ function renderChatDetail() {
       </div>
       ${isIntroducerView ? "" : `<button class="meetup-button" data-next="verify">Confirm Meetup</button>`}
       ${footerActions}
-      <div class="composer"><input placeholder="Write a message" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+      ${chatComposerMarkup("Write a message")}
     `;
     return;
   }
 
   if (activeChatDetailMode === "direct-connection" || activeChatDetailMode === "direct_connection_chat") {
     screen.innerHTML = `
-      <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>${chatPath} · Not yet Met</span></div></header>
-      <div class="direct-chat-actions compact-chat-actions">
-        <button data-next="profile" data-profile-name="${chatProfileName}">Profile</button>
-        <button data-next="person-trips" data-profile-name="${chatProfileName}">Trips</button>
-        <button data-next="person-plans" data-profile-name="${chatProfileName}">Plans</button>
-      </div>
+      ${chatHeaderMarkup(chatName, `${chatPath} · Not yet Met`)}
+      ${compactChatActionsMarkup(chatProfileName)}
       <div class="messages">
         <p class="bubble theirs">${chatPreview}</p>
         <p class="bubble mine">Perfect. I am in Barcelona from Thursday and would love that.</p>
       </div>
       <button class="meetup-button" data-next="verify">Confirm Meetup</button>
-      <div class="composer"><input placeholder="Message ${chatName.split(" ")[0]}" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+      ${chatComposerMarkup(`Message ${chatName.split(" ")[0]}`)}
     `;
     return;
   }
 
   screen.innerHTML = `
-    <header class="chat-top direct-chat-top"><div class="avatar-img"></div><div><strong>${chatName}</strong><span>Trusted Friend · 1st Degree</span></div></header>
-    <div class="direct-chat-actions compact-chat-actions">
-      <button data-next="profile" data-profile-name="${chatProfileName}">Profile</button>
-      <button data-next="person-trips" data-profile-name="${chatProfileName}">Trips</button>
-      <button data-next="person-plans" data-profile-name="${chatProfileName}">Plans</button>
-    </div>
+    ${chatHeaderMarkup(chatName, "Trusted Friend · 1st Degree")}
+    ${compactChatActionsMarkup(chatProfileName)}
     <div class="messages"><p class="bubble theirs">${chatPreview}</p><p class="bubble mine">Thank you. I will send a warm note.</p></div>
-    <div class="composer"><input placeholder="Message ${chatName.split(" ")[0]}" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
+    ${chatComposerMarkup(`Message ${chatName.split(" ")[0]}`)}
   `;
 }
 
 function confirmIntroduce() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Introduce Hugo and Emma">
       <h2>Introduce Hugo and Emma?</h2>
       <p>You can edit the note before opening the shared intro chat.</p>
       <textarea id="introComposeMessage" placeholder="Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel."></textarea>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-send-intro-message>Send Intro</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function confirmIntroSoftDecline() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card intro-compose-card" role="dialog" aria-modal="true" aria-label="Not right now">
       <h2>Not right now?</h2>
       <p>Keep it soft. You can send a note or close this without replying.</p>
       <textarea placeholder="Not right now, but happy to reconnect another time."></textarea>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-send-intro-decline-note>Send Note</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function confirmArchiveChat(chatName = "this chat") {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Archive chat">
       <h2>Archive chat?</h2>
       <p>This will remove the conversation from your inbox, but the history will remain available where relevant.</p>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-confirm-archive-chat>Archive Chat</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function confirmDeleteArchivedChat(chatName = "this archived chat", key = "") {
   pendingDeleteChatName = chatName;
   pendingDeleteChatKey = key;
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Delete archived chat">
       <h2>Delete archived chat?</h2>
       <p>This permanently removes ${chatName} from this prototype. It cannot be restored or undone.</p>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-confirm-delete-archived-chat>Delete Chat</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function showPhotoSourceSheet() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Add photo">
       <h2>Add photo</h2>
       <p>Share a photo into this conversation.</p>
       <div><button type="button" data-dialog-close>Take Photo</button><button type="button" data-dialog-close>Choose From Library</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function confirmLeaveIntroChat() {
-  document.querySelector(".discard-dialog")?.remove();
-  const dialog = document.createElement("div");
-  dialog.className = "discard-dialog";
-  dialog.innerHTML = `
+  openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="Leave intro chat">
       <h2>Leave intro chat?</h2>
       <p>You introduced Hugo and Emma. Leaving now will remove you from this conversation, but they can continue chatting directly.</p>
       <p>You can still view this introduction later in your archive.</p>
       <div><button type="button" data-dialog-close>Stay</button><button type="button" data-confirm-leave-intro>Leave Chat</button></div>
     </div>
-  `;
-  document.body.appendChild(dialog);
+  `);
 }
 
 function renderVerification(method = "qr") {
@@ -3666,16 +4035,8 @@ function completeVerification() {
   `;
 
   window.setTimeout(() => {
-    instagramAccessUnlocked = true;
-    trustedFriendState.verifiedMeetups += 1;
-    appState.confirmedMeetups = Array.isArray(appState.confirmedMeetups) ? appState.confirmedMeetups : [];
     const metPerson = selectedChatName && selectedChatName !== "Intro Request" ? selectedChatName : "Emma Laurent";
-    addGraphFlag("metConnections", metPerson);
-    appState.confirmedMeetups.unshift({
-      person: metPerson,
-      method: verificationMethod,
-      confirmedAt: new Date().toISOString()
-    });
+    confirmMeetup(metPerson);
     addNotificationEvent("directChat");
     persistPrototypeState();
     cta.disabled = false;
@@ -3744,15 +4105,11 @@ function cityGraphPeople(city = "Oslo") {
 }
 
 function visibleCityGraphPeople(city = "Oslo") {
-  return cityGraphPeople(city).filter(({ state }) => !state.locked && !state.archived);
+  return getVisibleConnections(city);
 }
 
 function branchPeopleFor(name = "", city = "") {
-  const rootKey = nameKey(name);
-  return cityGraphPeople(city)
-    .filter(({ person }) => nameKey(person.name) !== rootKey)
-    .filter(({ person }) => pathParts(person.path || profileForName(person.name)?.path || "").some((part) => nameKey(part) === rootKey))
-    .slice(0, 3);
+  return TrustGraphEngine.getBranchPeople(name, city);
 }
 
 function updateCityHubCounts() {
@@ -3854,8 +4211,8 @@ function renderIntroMethod(method = "mutual") {
   introMethod = method;
   document.querySelector("#introPreview")?.remove();
   const profile = selectedProfile();
-  const parts = pathParts(profile.path || "");
-  const mutualName = parts.length >= 3 ? parts[1] : "Laura";
+  const introPath = getIntroPath(profile.name);
+  const mutualName = introPath.via || "Laura";
   const firstName = profile.name.split(" ")[0];
   const title = document.querySelector("#introTitle");
   const pathLine = document.querySelector("#introPathLine");
@@ -3865,7 +4222,7 @@ function renderIntroMethod(method = "mutual") {
   const recipient = document.querySelector("#introRecipient");
   if (title) title.textContent = method === "mutual" ? `Request intro to ${firstName} via ${mutualName}` : `Request ${firstName} directly`;
   if (pathLine) pathLine.textContent = method === "mutual" ? `Connected via ${mutualName}` : `Direct request to ${firstName}`;
-  const mutualPathActive = method !== "mutual" || isActiveTrustPath(profile.path, profile.name);
+  const mutualPathActive = method !== "mutual" || introPath.active;
   if (method === "mutual") {
     if (recipient) recipient.innerHTML = `<span>Send ${mutualName} a note</span><strong>${mutualName}</strong>`;
     if (note) note.textContent = mutualPathActive
@@ -3925,26 +4282,43 @@ function renderOnboardingCarousel() {
   dots.innerHTML = slides.map((_, index) => (
     `<button type="button" class="${index === onboardingSlide ? "active" : ""}" data-onboarding-dot="${index}" aria-label="Go to intro slide ${index + 1}"></button>`
   )).join("");
+  const previous = document.querySelector("[data-onboarding-prev]");
+  const next = document.querySelector("[data-onboarding-next]");
+  if (previous) previous.disabled = onboardingSlide === 0;
+  if (next) {
+    const finalSlide = onboardingSlide === slides.length - 1;
+    next.textContent = finalSlide ? "Start Building Your Network" : "Next";
+    next.dataset.onboardingComplete = finalSlide ? "true" : "false";
+  }
 }
 
 function startOnboardingAutoPlay() {
-  const track = document.querySelector("#onboardingTrack");
-  if (!track) return;
   window.clearInterval(onboardingTimer);
-  onboardingTimer = window.setInterval(() => {
-    const slides = track.querySelectorAll(".onboarding-slide").length;
-    onboardingSlide = (onboardingSlide + 1) % slides;
-    renderOnboardingCarousel();
-  }, 3600);
+  onboardingTimer = null;
 }
 
 function resetOnboardingAutoPlay() {
-  startOnboardingAutoPlay();
+  window.clearInterval(onboardingTimer);
+  onboardingTimer = null;
+}
+
+function completeFirstTimeOnboarding() {
+  appState.onboardingCompleted = true;
+  persistPrototypeState();
+  showScreen("basics");
+}
+
+function syncGenderSelfDescribe(select) {
+  if (!select) return;
+  const target = select.id === "basicGender" ? document.querySelector("#basicGenderSelfDescribe") : document.querySelector("#editProfileGenderSelfDescribe");
+  if (target) target.hidden = select.value !== "Self-describe";
 }
 
 function hydrateLists() {
   renderOnboardingCarousel();
   startOnboardingAutoPlay();
+  syncGenderSelfDescribe(document.querySelector("#basicGender"));
+  syncGenderSelfDescribe(document.querySelector("#editProfileGender"));
   renderHomePeople();
   renderHomePlans();
   renderHomeSuggestions();
@@ -3978,7 +4352,16 @@ function bindInteractions() {
     renderHomeSuggestions();
   });
   document.querySelector("#networkSearch")?.addEventListener("input", renderNetworkLists);
+  document.querySelector("#basicGender")?.addEventListener("change", (event) => syncGenderSelfDescribe(event.target));
+  document.querySelector("#editProfileGender")?.addEventListener("change", (event) => syncGenderSelfDescribe(event.target));
   let swipeBackStart = null;
+  let notificationSwipeStart = null;
+
+  const closeSwipedNotificationCards = (exceptCard = null) => {
+    document.querySelectorAll(".notification-card.is-swiped").forEach((card) => {
+      if (card !== exceptCard) card.classList.remove("is-swiped");
+    });
+  };
 
   document.querySelector("#homeTripSelect")?.addEventListener("change", (event) => {
     activeHomeSelectorValue = event.target.value;
@@ -4005,7 +4388,6 @@ function bindInteractions() {
       const slides = onboardingTrack.querySelectorAll(".onboarding-slide").length;
       onboardingSlide = Math.min(Math.max(onboardingSlide + (delta < 0 ? 1 : -1), 0), slides - 1);
       renderOnboardingCarousel();
-      resetOnboardingAutoPlay();
     });
   }
 
@@ -4030,12 +4412,73 @@ function bindInteractions() {
   });
 
   document.addEventListener("pointerdown", (event) => {
+    const notificationContent = event.target.closest("#notifications .notification-swipe-content");
+    if (notificationContent && !event.target.closest("button, a, input, textarea, select")) {
+      const card = notificationContent.closest("[data-notification-card]");
+      if (card) {
+        closeSwipedNotificationCards(card);
+        notificationSwipeStart = {
+          card,
+          content: notificationContent,
+          x: event.clientX,
+          y: event.clientY,
+          dragging: false,
+        };
+        return;
+      }
+    }
+
+    if (!event.target.closest(".notification-card")) {
+      closeSwipedNotificationCards();
+    }
+
     if (event.clientX > 28 || rootScreens.has(activeScreenId())) return;
     if (event.target.closest(".onboarding-track, .plan-preview-stack, .profile-carousel, .mini-card-row, .unlock-strip, .testimonial-row, input, textarea, select, button")) return;
     swipeBackStart = { x: event.clientX, y: event.clientY };
   });
 
+  document.addEventListener("pointermove", (event) => {
+    if (!notificationSwipeStart) return;
+    const deltaX = event.clientX - notificationSwipeStart.x;
+    const deltaY = event.clientY - notificationSwipeStart.y;
+    if (!notificationSwipeStart.dragging && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+    if (!notificationSwipeStart.dragging && Math.abs(deltaY) > Math.abs(deltaX)) {
+      notificationSwipeStart = null;
+      return;
+    }
+    notificationSwipeStart.dragging = true;
+    const translate = Math.max(Math.min(deltaX, 0), -96);
+    notificationSwipeStart.card.classList.add("is-swiping");
+    notificationSwipeStart.card.classList.remove("is-swiped");
+    notificationSwipeStart.content.style.transform = `translateX(${translate}px)`;
+  });
+
+  document.addEventListener("pointercancel", () => {
+    if (!notificationSwipeStart) return;
+    notificationSwipeStart.card.classList.remove("is-swiping");
+    notificationSwipeStart.content.style.transform = "";
+    notificationSwipeStart = null;
+  });
+
   document.addEventListener("pointerup", (event) => {
+    if (notificationSwipeStart) {
+      const { card, content, x, y, dragging } = notificationSwipeStart;
+      const deltaX = event.clientX - x;
+      const deltaY = Math.abs(event.clientY - y);
+      notificationSwipeStart = null;
+      card.classList.remove("is-swiping");
+      content.style.transform = "";
+      if (dragging && deltaX < -142 && deltaY < 96) {
+        markNotificationCleared(card.dataset.notificationCard);
+        return;
+      }
+      if (dragging && deltaX < -42 && deltaY < 96) {
+        card.classList.add("is-swiped");
+        return;
+      }
+      card.classList.remove("is-swiped");
+    }
+
     if (!swipeBackStart) return;
     const deltaX = event.clientX - swipeBackStart.x;
     const deltaY = Math.abs(event.clientY - swipeBackStart.y);
@@ -4061,7 +4504,23 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-dialog-close]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
+      return;
+    }
+
+    if (event.target.closest("[data-tour-dismiss]")) {
+      completeProductTour();
+      return;
+    }
+
+    if (event.target.closest("[data-tour-next]")) {
+      appState.productTourStep = (appState.productTourStep || 0) + 1;
+      if (appState.productTourStep >= productTourSteps.length) {
+        completeProductTour();
+        return;
+      }
+      persistPrototypeState();
+      navigateProductTourStep();
       return;
     }
 
@@ -4077,7 +4536,7 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-send-intro-message]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       introThreadStarted = true;
       introThreadLeft = false;
       appState.introRequestAccepted = true;
@@ -4090,7 +4549,7 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-send-intro-decline-note]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       appState.pendingIntroRequestActive = false;
       appState.introRequestDeclined = true;
       connectionRequests.intro.forEach((request) => {
@@ -4108,7 +4567,7 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-confirm-leave-intro]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       introThreadLeft = true;
       activeChatDetailMode = "direct_connection_chat";
       selectedChatName = "Emma Laurent";
@@ -4121,7 +4580,7 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-confirm-archive-chat]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       const chat = findChatByName(pendingArchiveChatCard?.dataset.chatName || "");
       if (chat) chat.archived = true;
       pendingArchiveChatCard?.remove();
@@ -4132,7 +4591,7 @@ function bindInteractions() {
     }
 
     if (event.target.closest("[data-confirm-delete-archived-chat]")) {
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       if (pendingDeleteChatKey) deletedChatKeys.add(pendingDeleteChatKey);
       Object.values(chats).forEach((items) => {
         for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -4153,10 +4612,8 @@ function bindInteractions() {
     const confirmTrustUpgrade = event.target.closest("[data-confirm-trust-upgrade]");
     if (confirmTrustUpgrade) {
       const name = confirmTrustUpgrade.dataset.confirmTrustUpgrade;
-      document.querySelector(".discard-dialog")?.remove();
-      addGraphFlag("trustedConnections", name);
-      removeGraphFlag("metConnections", name);
-      if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+      closeActiveDialog();
+      promoteToTrusted(name);
       addNotificationEvent("acceptedIntro");
       refreshTrustGraphViews();
       showUtilityFeedback("Trusted Friend added", `${name.split(" ")[0]}'s branch is now active. City hubs, suggestions and plans can expand through this trusted route.`);
@@ -4167,7 +4624,31 @@ function bindInteractions() {
     if (onboardingDot) {
       onboardingSlide = Number(onboardingDot.dataset.onboardingDot);
       renderOnboardingCarousel();
-      resetOnboardingAutoPlay();
+      return;
+    }
+
+    const onboardingPrevious = event.target.closest("[data-onboarding-prev]");
+    if (onboardingPrevious) {
+      onboardingSlide = Math.max(0, onboardingSlide - 1);
+      renderOnboardingCarousel();
+      return;
+    }
+
+    const onboardingNext = event.target.closest("[data-onboarding-next]");
+    if (onboardingNext) {
+      if (onboardingNext.dataset.onboardingComplete === "true") {
+        completeFirstTimeOnboarding();
+        return;
+      }
+      const slides = document.querySelectorAll("#onboardingTrack .onboarding-slide").length;
+      onboardingSlide = Math.min(slides - 1, onboardingSlide + 1);
+      renderOnboardingCarousel();
+      return;
+    }
+
+    const onboardingSkip = event.target.closest("[data-onboarding-skip]");
+    if (onboardingSkip) {
+      completeFirstTimeOnboarding();
       return;
     }
 
@@ -4232,6 +4713,20 @@ function bindInteractions() {
     if (shareContact) {
       shareContact.textContent = "Shared";
       shareContact.classList.add("shared");
+      showShareCompleteDialog("profile", shareContact.dataset.shareContact);
+      return;
+    }
+
+    const sharePlanSend = event.target.closest("[data-share-plan-send]");
+    if (sharePlanSend) {
+      const recipient = sharePlanSend.closest(".share-send-box")?.querySelector("select")?.value || "Laura Chen";
+      showShareCompleteDialog("plan", recipient);
+      return;
+    }
+
+    const shareCancel = event.target.closest("[data-share-cancel]");
+    if (shareCancel) {
+      returnToShareOrigin();
       return;
     }
 
@@ -4321,9 +4816,7 @@ function bindInteractions() {
         request.status = accepted ? "Accepted" : "Declined";
         request.actions = false;
         if (accepted && group === "met") {
-          addGraphFlag("trustedConnections", request.name);
-          removeGraphFlag("metConnections", request.name);
-          if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+          promoteToTrusted(request.name);
           addNotificationEvent("acceptedIntro");
         }
         if (accepted && group === "intro") {
@@ -4660,7 +5153,7 @@ function bindInteractions() {
       const key = savePrivacy.dataset.savePrivacySetting;
       const selected = document.querySelector(`[data-privacy-option="${key}"].selected`);
       if (selected) settingsState.privacy[key] = selected.dataset.privacyValue;
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       syncSettingsRows();
       persistPrototypeState();
       showUtilityFeedback("Privacy updated", `${privacyOptions[key]?.title || "Setting"} is now ${settingsState.privacy[key]}.`);
@@ -4818,6 +5311,18 @@ function bindInteractions() {
         appState.notificationsRead = true;
         notificationItems.forEach((item) => { item.active = false; });
       }
+      if (action === "reset-product-tour") {
+        window.localStorage.setItem("productTourCompleted", "false");
+        appState.productTourCompleted = false;
+        appState.productTourActive = true;
+        appState.productTourStep = 0;
+        appState.homeTourComplete = false;
+        appState.homeTourStep = 0;
+        persistPrototypeState();
+        navigateProductTourStep();
+        showUtilityFeedback("Product tour reset", "The guided tour is ready to replay from Home.");
+        return;
+      }
       if (action === "reset") {
         window.localStorage.removeItem(prototypeStorageKey);
         window.location.reload();
@@ -4856,7 +5361,7 @@ function bindInteractions() {
       }
       appState.accountDeletionQueued = true;
       persistPrototypeState();
-      document.querySelector(".discard-dialog")?.remove();
+      closeActiveDialog();
       showUtilityFeedback("Account deletion queued", "In the live beta, this would start permanent account deletion after backend confirmation.");
       return;
     }
@@ -4878,6 +5383,26 @@ function bindInteractions() {
       openDirectChatWith(messagePerson.dataset.messagePerson, {
         preview: `Start a direct conversation with ${messagePerson.dataset.messagePerson.split(" ")[0]}.`
       });
+      return;
+    }
+
+    const clearNotification = event.target.closest("[data-clear-notification]");
+    if (clearNotification) {
+      markNotificationCleared(clearNotification.dataset.clearNotification);
+      return;
+    }
+
+    const clearAllNotifications = event.target.closest("[data-clear-all-notifications]");
+    if (clearAllNotifications) {
+      const result = clearNonCriticalNotifications();
+      if (result.cleared || result.kept) {
+        showUtilityFeedback(
+          result.cleared ? "Notifications cleared" : "Action needed",
+          result.kept
+            ? `${result.cleared ? `${result.cleared} notification${result.cleared === 1 ? "" : "s"} cleared. ` : ""}${result.kept} pending request${result.kept === 1 ? "" : "s"} stayed visible so you can decide what to do.`
+            : `${result.cleared} notification${result.cleared === 1 ? "" : "s"} cleared from your notification centre.`
+        );
+      }
       return;
     }
 
@@ -4914,6 +5439,7 @@ function bindInteractions() {
     const notificationProfile = event.target.closest("[data-notification-profile]");
     if (notificationProfile) {
       selectedProfileName = notificationProfile.dataset.notificationProfile;
+      markNotificationViewedFromElement(notificationProfile);
       showScreen("profile");
       return;
     }
@@ -4924,9 +5450,11 @@ function bindInteractions() {
       if (chatType === "plan_chat" || chatType === "archived_plan_chat") {
         selectedPlanName = notificationChat.dataset.notificationChat;
         selectedPlanStatus = chatType === "archived_plan_chat" ? "past" : planStatusForName(selectedPlanName);
+        markNotificationViewedFromElement(notificationChat);
         showScreen("plan-chat");
         return;
       }
+      markNotificationViewedFromElement(notificationChat);
       openDirectChatWith(notificationChat.dataset.notificationChat, {
         mode: chatType,
         preview: "Open the conversation from this notification."
@@ -4963,12 +5491,38 @@ function bindInteractions() {
         goBack();
         return;
       }
+      markNotificationViewedFromElement(next);
       if (next.dataset.profileName) selectedProfileName = next.dataset.profileName;
       if (next.dataset.planName) selectedPlanName = next.dataset.planName;
       if (next.dataset.planStatus) selectedPlanStatus = next.dataset.planStatus;
       if (next.dataset.chatName) selectedChatName = next.dataset.chatName;
       if (next.dataset.chatPath) selectedChatPath = next.dataset.chatPath;
       if (next.dataset.chatPreview) selectedChatPreview = next.dataset.chatPreview;
+      if (next.dataset.next === "onboarding-intro") {
+        onboardingSlide = 0;
+        appState.onboardingCompleted = false;
+        appState.productTourActive = false;
+        appState.productTourCompleted = false;
+        appState.productTourStep = 0;
+        window.localStorage.setItem("productTourCompleted", "false");
+      }
+      if (next.dataset.signIn === "true" || next.hasAttribute("data-sign-in")) {
+        appState.accountCreated = true;
+        appState.homeTourComplete = true;
+        appState.productTourActive = false;
+        appState.productTourCompleted = true;
+        persistPrototypeState();
+      }
+      if (current === "qr-reveal" && next.dataset.next === "home") {
+        appState.accountCreated = true;
+        if (!appState.productTourCompleted) {
+          appState.productTourStep = 0;
+          appState.productTourActive = true;
+          appState.homeTourStep = 0;
+          appState.homeTourComplete = false;
+        }
+        persistPrototypeState();
+      }
       if (next.dataset.next === "my-plans") planFilter = "hosting";
       if (next.dataset.next === "trip") {
         tripEditorMode = "create";
@@ -5005,6 +5559,10 @@ function bindInteractions() {
         } else if (!introThreadStarted) {
           activeChatDetailMode = "default";
         }
+      }
+      if (current === "qr-reveal" && next.dataset.next === "home" && appState.productTourActive && !appState.productTourCompleted) {
+        startProductTour();
+        return;
       }
       showScreen(next.dataset.next);
       return;
@@ -5078,3 +5636,4 @@ ensureBackButtons();
 document.querySelectorAll(".bottom-nav").forEach(renderNav);
 bindInteractions();
 updateNotificationBadges();
+showScreen("welcome", { replace: true });
