@@ -19,6 +19,13 @@ let selectedPlanStatus = "discoverable";
 let selectedPlanName = "Coffee in Shoreditch";
 let requestFilter = "intro";
 let networkFilter = "trusted";
+let activeNetworkCity = "London";
+let activeNetworkPerson = "Laura Chen";
+let activeExplorerMode = "map";
+let previousExplorerPerson = "";
+let networkDrawerState = "collapsed";
+let networkDrawerDragStartY = null;
+let networkDrawerSuppressClick = false;
 let selectedProfileName = "Emma Laurent";
 let verificationCountdownTimer = null;
 let homeTripDateRange = "8/11/26-15/11/26";
@@ -132,6 +139,147 @@ function writeStoredJson(key, value) {
   }
 }
 
+function normalizePhoneNumber(value = "") {
+  return value.replace(/[^\d\s()-]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function syncSignupPhoneState() {
+  const input = query("#signupPhoneNumber");
+  if (input) appState.signup.phoneNumber = normalizePhoneNumber(input.value);
+  appState.signup.fullPhoneNumber = [appState.signup.countryCode, appState.signup.phoneNumber].filter(Boolean).join(" ").trim();
+}
+
+function renderCountryCodePicker(search = "") {
+  const selected = countryDialCodes.find((country) => country.code === appState.signup.countryCode && country.name === appState.signup.countryName) || countryDialCodes[0];
+  const flag = query("[data-country-flag]");
+  const code = query("[data-country-code]");
+  const input = query("#signupPhoneNumber");
+  const options = query("#countryCodeOptions");
+  const term = search.trim().toLowerCase();
+  if (flag) flag.textContent = selected.flag;
+  if (code) code.textContent = selected.code;
+  if (input && input.value !== appState.signup.phoneNumber) input.value = appState.signup.phoneNumber || "";
+  if (!options) return;
+  const countries = countryDialCodes.filter((country) => (
+    country.name.toLowerCase().includes(term) ||
+    country.code.includes(term) ||
+    country.flag.includes(term)
+  ));
+  options.innerHTML = countries.map((country) => (
+    `<button type="button" data-country-code-option="${country.code}" data-country-name="${country.name}" data-country-flag="${country.flag}"><span>${country.flag}</span><strong>${country.code}</strong><em>${country.name}</em></button>`
+  )).join("");
+}
+
+function toggleCountryMenu(open) {
+  const menu = query("#countryCodeMenu");
+  const button = query("[data-country-picker]");
+  if (!menu || !button) return;
+  menu.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
+  if (open) {
+    query("#countryCodeSearch")?.focus();
+    renderCountryCodePicker(query("#countryCodeSearch")?.value || "");
+  }
+}
+
+function tripPurposeNeedsDetail(purpose = query("#tripPurpose")?.value || "") {
+  return purpose === "Event" || purpose === "Other";
+}
+
+function syncTripPurposeDetail() {
+  const purpose = query("#tripPurpose")?.value || "";
+  const detail = query("#tripPurposeDetail");
+  const label = query("#tripPurposeDetailLabel");
+  const input = query("#tripReason");
+  const needsDetail = tripPurposeNeedsDetail(purpose);
+  if (detail) detail.hidden = !needsDetail;
+  if (label) label.textContent = purpose === "Event" ? "What event are you attending?" : "What brings you here?";
+  if (input) input.placeholder = purpose === "Event" ? "Fête de la Musique, festival, wedding" : "Solo weekend, proposal, visiting friends";
+  if (!needsDetail && input) input.value = "";
+}
+
+function getOnboardingDraft() {
+  appState.onboardingDraft = appState.onboardingDraft || { basics: {}, profileSetup: {}, trip: {} };
+  return appState.onboardingDraft;
+}
+
+function captureOnboardingDraft(screenId = activeScreenId()) {
+  const draft = getOnboardingDraft();
+  if (screenId === "basics") {
+    const inputs = queryAll("#basics .form-stack input");
+    draft.basics = {
+      name: inputs[0]?.value || "",
+      age: inputs[1]?.value || "",
+      gender: query("#basicGender")?.value || "",
+      genderSelfDescribe: query("#basicGenderSelfDescribe input")?.value || "",
+      currentCity: inputs[3]?.value || "",
+      homeCity: inputs[4]?.value || ""
+    };
+  }
+  if (screenId === "profile-setup") {
+    draft.profileSetup = {
+      selectedInterests: queryAll("#profile-setup .selectable button.selected").map((button) => button.textContent.trim()),
+      prompts: queryAll("#profile-setup textarea, #profile-setup input").map((field) => field.value)
+    };
+  }
+  if (screenId === "trip" && tripEditorMode !== "edit") {
+    draft.trip = {
+      destination: query("#trip .trip-card input[type='text']")?.value || "",
+      start: query("#tripStartDate")?.value || "",
+      end: query("#tripEndDate")?.value || "",
+      visibility: query("#tripVisibility")?.value || "",
+      purpose: query("#tripPurpose")?.value || "",
+      reason: query("#tripReason")?.value || "",
+      privacyExtra: query("[data-privacy-extra]")?.getAttribute("aria-pressed") === "true",
+      hiddenFrom: selectedHiddenTripPeople()
+    };
+  }
+}
+
+function restoreOnboardingDraft(screenId = activeScreenId()) {
+  const draft = getOnboardingDraft();
+  if (screenId === "basics" && draft.basics) {
+    const inputs = queryAll("#basics .form-stack input");
+    [draft.basics.name, draft.basics.age, draft.basics.genderSelfDescribe, draft.basics.currentCity, draft.basics.homeCity].forEach((value, index) => {
+      if (inputs[index] && value !== undefined) inputs[index].value = value;
+    });
+    const gender = query("#basicGender");
+    if (gender && draft.basics.gender !== undefined) gender.value = draft.basics.gender;
+    query("#basicGender")?.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  if (screenId === "profile-setup" && draft.profileSetup) {
+    queryAll("#profile-setup .selectable button").forEach((button) => {
+      button.classList.toggle("selected", draft.profileSetup.selectedInterests?.includes(button.textContent.trim()));
+    });
+    queryAll("#profile-setup textarea, #profile-setup input").forEach((field, index) => {
+      if (draft.profileSetup.prompts?.[index] !== undefined) field.value = draft.profileSetup.prompts[index];
+    });
+  }
+  if (screenId === "trip" && tripEditorMode !== "edit" && draft.trip) {
+    const destination = query("#trip .trip-card input[type='text']");
+    if (destination) destination.value = draft.trip.destination || "";
+    if (query("#tripStartDate")) query("#tripStartDate").value = draft.trip.start || "";
+    if (query("#tripEndDate")) query("#tripEndDate").value = draft.trip.end || "";
+    if (query("#tripVisibility") && draft.trip.visibility) query("#tripVisibility").value = draft.trip.visibility;
+    if (query("#tripPurpose") && draft.trip.purpose) query("#tripPurpose").value = draft.trip.purpose;
+    if (query("#tripReason")) query("#tripReason").value = draft.trip.reason || "";
+    const privacyExtra = query("[data-privacy-extra]");
+    if (privacyExtra) {
+      privacyExtra.classList.toggle("active", Boolean(draft.trip.privacyExtra));
+      privacyExtra.setAttribute("aria-pressed", String(Boolean(draft.trip.privacyExtra)));
+    }
+    queryAll("[data-hidden-people-picker] button").forEach((button) => {
+      button.classList.toggle("selected", Boolean(draft.trip.hiddenFrom?.includes(button.textContent.trim())));
+    });
+    syncTripPurposeDetail();
+  }
+}
+
+function clearOnboardingTripDraft() {
+  const draft = getOnboardingDraft();
+  draft.trip = {};
+}
+
 const trustedFriendState = {
   used: 4,
   launchCap: 6,
@@ -175,6 +323,24 @@ const appState = {
   metConnections: [],
   trustedConnections: [],
   vouchedConnections: [],
+  signup: {
+    countryCode: "+44",
+    countryName: "United Kingdom",
+    flag: "🇬🇧",
+    phoneNumber: "",
+    fullPhoneNumber: ""
+  },
+  onboardingDraft: {
+    basics: {},
+    profileSetup: {},
+    trip: {}
+  },
+  progressionLedger: {
+    meetups: [],
+    trustedUpgrades: [],
+    vouches: [],
+    introductions: []
+  },
   feedback: [],
   onboardingCompleted: false,
   accountCreated: false,
@@ -185,6 +351,17 @@ const appState = {
   productTourCompleted: false
 };
 
+const countryDialCodes = [
+  { flag: "🇬🇧", code: "+44", name: "United Kingdom" },
+  { flag: "🇺🇸", code: "+1", name: "United States" },
+  { flag: "🇨🇦", code: "+1", name: "Canada" },
+  { flag: "🇦🇺", code: "+61", name: "Australia" },
+  { flag: "🇳🇬", code: "+234", name: "Nigeria" },
+  { flag: "🇫🇷", code: "+33", name: "France" },
+  { flag: "🇪🇸", code: "+34", name: "Spain" },
+  { flag: "🇩🇪", code: "+49", name: "Germany" }
+];
+
 const notificationItems = [
   { id: "intro-noah", kind: "intro", title: "Intro request received", body: "Noah asked Laura to introduce you.", profile: "Noah Silva", active: true },
   { id: "plan-sofia", kind: "plan", title: "Plan join request", body: "Sofia requested to join Coffee in Shoreditch.", profile: "Sofia Marin", active: true },
@@ -193,7 +370,11 @@ const notificationItems = [
   { id: "overlap-paris", kind: "home", title: "Trip overlap found", body: "Three trusted mutuals are in Paris next week.", active: true },
   { id: "trusted-emma", kind: "unlock", title: "Trusted Friend confirmed", body: "Emma became a Trusted Friend after mutual verification.", active: true },
   { id: "meetup-theo", kind: "network", title: "Meetup verified", body: "Your QR meetup with Theo was confirmed.", active: true },
-  { id: "vouched-amara", kind: "profile", title: "New vouched connection", body: "Laura vouched for Amara in your London hub.", profile: "Amara Okoye", active: true }
+  { id: "vouched-amara", kind: "profile", title: "New vouched connection", body: "Laura vouched for Amara in your London hub.", profile: "Amara Okoye", active: true },
+  { id: "travel-laura-barcelona", kind: "travel-city", title: "Trusted friend arriving", body: "Laura will be in Barcelona next week.", city: "Barcelona", profile: "Laura Chen", active: true },
+  { id: "travel-tokyo-overlap", kind: "travel-overlap", title: "Tokyo overlap", body: "3 trusted connections will be in Tokyo during your trip.", city: "Tokyo", active: true },
+  { id: "travel-emma-lisbon", kind: "travel-shared", title: "Shared destination", body: "Emma will be in Lisbon during your travel dates.", city: "Lisbon", profile: "Emma Laurent", active: true },
+  { id: "travel-plan-paris", kind: "travel-plan", title: "Trusted plan overlap", body: "2 people from your network are attending a plan in Paris.", city: "Paris", active: true }
 ];
 
 const privacyOptions = {
@@ -261,7 +442,8 @@ const secondDegreePeople = [
 
 const thirdDegreePeople = [
   { name: "Nina", city: "Paris", path: "You -> Laura -> Emma -> Nina", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
-  { name: "Ren", city: "Tokyo", path: "You -> Theo -> Mina -> Ren", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true }
+  { name: "Ren", city: "Tokyo", path: "You -> Theo -> Mina -> Ren", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
+  { name: "Kenji Mori", city: "Tokyo", path: "You -> Laura -> Emma -> Theo -> Jonas -> Kenji", badge: "5th Degree", cta: "Locked", degree: 5, locked: true }
 ];
 
 const chats = {
@@ -403,7 +585,8 @@ function updateHomeTripDateRange() {
   const start = formatTripDate(document.querySelector("#tripStartDate")?.value);
   const end = formatTripDate(document.querySelector("#tripEndDate")?.value);
   const destination = document.querySelector(".trip-card input[type='text']")?.value.trim() || "Upcoming trip";
-  const reason = document.querySelector("#tripReason")?.value.trim() || "";
+  const purpose = document.querySelector("#tripPurpose")?.value || "Leisure";
+  const reason = tripPurposeNeedsDetail(purpose) ? document.querySelector("#tripReason")?.value.trim() || "" : "";
   const hiddenFrom = selectedHiddenTripPeople();
   if (start && end) homeTripDateRange = `${start}-${end}`;
   if (start && !end) homeTripDateRange = start;
@@ -417,12 +600,14 @@ function updateHomeTripDateRange() {
       end: document.querySelector("#tripEndDate")?.value,
       visibility: "trusted network only",
       status: "New trip",
+      purpose,
       reason,
       hiddenFrom
     };
     homeTrips.unshift(savedTrip);
     myTrips.push(savedTrip);
     activeHomeTripId = savedTrip.id;
+    clearOnboardingTripDraft();
   }
 }
 
@@ -455,6 +640,7 @@ function renderTripEditor() {
   const start = document.querySelector("#tripStartDate");
   const end = document.querySelector("#tripEndDate");
   const visibility = document.querySelector("#tripVisibility");
+  const purpose = document.querySelector("#tripPurpose");
   const reason = document.querySelector("#tripReason");
   const privacyExtra = document.querySelector("[data-privacy-extra]");
   const hiddenPicker = document.querySelector("[data-hidden-people-picker]");
@@ -475,20 +661,16 @@ function renderTripEditor() {
   }
 
   if (!isEditing || !trip) {
-    if (destination) destination.value = "";
-    if (start) start.value = "";
-    if (end) end.value = "";
-    if (reason) reason.value = "";
-    if (privacyExtra) {
-      privacyExtra.classList.remove("active");
-      privacyExtra.setAttribute("aria-pressed", "false");
-    }
-    hiddenPicker?.querySelectorAll("button").forEach((button) => button.classList.remove("selected"));
+    restoreOnboardingDraft("trip");
+    syncTripPurposeDetail();
     return;
   }
   if (destination) destination.value = [trip.city, trip.country].filter(Boolean).join(", ");
   if (start) start.value = trip.start || "";
   if (end) end.value = trip.end || "";
+  if (reason) reason.value = trip.reason || "";
+  if (purpose) purpose.value = trip.purpose || (trip.reason ? "Other" : "Leisure");
+  syncTripPurposeDetail();
   if (reason) reason.value = trip.reason || "";
   if (privacyExtra) {
     const hasHiddenPeople = Boolean(trip.hiddenFrom?.length);
@@ -514,8 +696,9 @@ function saveEditedTrip() {
   const destinationValue = document.querySelector(".trip-card input[type='text']")?.value.trim() || `${trip.city}, ${trip.country}`;
   const { city, country } = parseTripDestination(destinationValue);
   const visibility = document.querySelector("#tripVisibility")?.value || trip.visibility;
+  const purpose = document.querySelector("#tripPurpose")?.value || trip.purpose || "Leisure";
   const openToMeetups = document.querySelector(".trip-card .toggle-card.active")?.textContent.includes("Open to Meetups");
-  const reason = document.querySelector("#tripReason")?.value.trim() || "";
+  const reason = tripPurposeNeedsDetail(purpose) ? document.querySelector("#tripReason")?.value.trim() || "" : "";
   const hiddenFrom = selectedHiddenTripPeople();
 
   trip.city = city;
@@ -523,6 +706,7 @@ function saveEditedTrip() {
   trip.start = document.querySelector("#tripStartDate")?.value || trip.start;
   trip.end = document.querySelector("#tripEndDate")?.value || trip.end;
   trip.visibility = visibility.toLowerCase();
+  trip.purpose = purpose;
   trip.reason = reason;
   trip.hiddenFrom = hiddenFrom;
   if (openToMeetups) trip.status = trip.status === "past" ? "past" : "Open to meetups";
@@ -534,6 +718,7 @@ function saveEditedTrip() {
     homeTrip.start = trip.start;
     homeTrip.end = trip.end;
     homeTrip.reason = trip.reason;
+    homeTrip.purpose = trip.purpose;
     homeTrip.hiddenFrom = trip.hiddenFrom;
   }
 
@@ -1160,14 +1345,6 @@ const connectionRequests = {
   ]
 };
 
-const clusterNetworks = {
-  Laura: { state: "unlocked", path: "Trusted Friend · 1st Degree", people: ["Maya", "Ari", "Sofia"] },
-  Emma: { state: "locked", path: "2nd Degree via Laura · request intro first", people: ["Locked", "Locked", "Locked"] },
-  Theo: { state: "unlocked", path: "Trusted Friend · 1st Degree", people: ["Mina", "Ari", "Ren"] },
-  Noah: { state: "locked", path: "2nd Degree via Amara · network locked", people: ["Locked", "Locked", "Locked"] },
-  Mina: { state: "locked", path: "Met only · network stays locked until upgrade", people: ["Locked", "Locked", "Locked"] }
-};
-
 function readPrototypeState() {
   return readStoredJson(prototypeStorageKey, {});
 }
@@ -1476,6 +1653,36 @@ function addNotificationEvent(kind) {
       kind: "home",
       title: "Trip overlap found",
       body: "Emma will also be in Barcelona during your travel dates."
+    },
+    trustedFriendArriving: {
+      id: `dev-travel-friend-${now}`,
+      kind: "travel-city",
+      title: "Trusted friend arriving",
+      body: "Laura will be in Barcelona next week.",
+      city: "Barcelona",
+      profile: "Laura Chen"
+    },
+    mutualOverlap: {
+      id: `dev-travel-mutual-${now}`,
+      kind: "travel-overlap",
+      title: "Tokyo overlap",
+      body: "3 trusted connections will be in Tokyo during your trip.",
+      city: "Tokyo"
+    },
+    sharedDestination: {
+      id: `dev-travel-shared-${now}`,
+      kind: "travel-shared",
+      title: "Shared destination",
+      body: "Emma will be in Lisbon during your travel dates.",
+      city: "Lisbon",
+      profile: "Emma Laurent"
+    },
+    trustedPlanOverlap: {
+      id: `dev-travel-plan-${now}`,
+      kind: "travel-plan",
+      title: "Trusted plan overlap",
+      body: "2 people from your network are attending a plan in Paris.",
+      city: "Paris"
     }
   };
   if (events[kind]) upsertNotification(events[kind]);
@@ -1578,7 +1785,7 @@ const screenRenderers = {
   "request-intro": () => renderIntroMethod(introMethod),
   "nearby-people": renderNearbyPeoplePage,
   "suggested-connections": renderSuggestedConnectionsPage,
-  "network-map": () => renderCityHub(query(".city-node.active")?.dataset.city || "Oslo"),
+  "network-map": () => renderNetworkExplorer(activeNetworkCity, activeNetworkPerson),
   "all-trips": renderAllTrips,
   trip: renderTripEditor,
   "my-plans": renderMyPlans,
@@ -1609,9 +1816,9 @@ const productTourSteps = [
   },
   {
     screen: "network-map",
-    highlight: ".city-sky .cluster-card, .city-sky .map-bottom",
-    title: "City Hubs",
-    copy: "City Hubs show where your trusted network is active."
+    highlight: ".network-graph-card, .global-network-map",
+    title: "Network Explorer",
+    copy: "Explore trust paths, city clusters and locked branches across your global network."
   },
   {
     screen: "trusted-plans",
@@ -1698,6 +1905,8 @@ function completeProductTour() {
 
 function showScreen(id, options = {}) {
   const current = activeScreenId();
+  captureOnboardingDraft(current);
+  syncSignupPhoneState();
   if (!options.replace && current && current !== id) {
     screenHistory.push(current);
   }
@@ -1708,6 +1917,8 @@ function showScreen(id, options = {}) {
   const active = query(`[data-screen="${id}"] .scroll-area`);
   if (active) active.scrollTop = 0;
   renderScreenContent(id);
+  restoreOnboardingDraft(id);
+  renderCountryCodePicker();
   updateNotificationBadges();
   renderTrustCaps();
   if (!options.skipTour) renderProductTour();
@@ -1956,6 +2167,10 @@ function renderNotifications() {
         home: `<button data-next="home">See People</button>`,
         unlock: `<button data-next="unlocked">View Unlock</button>`,
         network: `<button data-next="network-map">Explore</button>`,
+        "travel-city": `<button type="button" data-notification-city="${item.city || "Barcelona"}">View City</button>`,
+        "travel-overlap": `<button type="button" data-notification-city="${item.city || "Tokyo"}">View Overlap</button>`,
+        "travel-shared": `<button type="button" data-notification-city="${item.city || "Lisbon"}">View City</button>`,
+        "travel-plan": `<button type="button" data-next="trusted-plans">View Plans</button>`,
         profile: `<button type="button" data-notification-profile="${item.profile}">View Profile</button>`
       };
       actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
@@ -2015,7 +2230,7 @@ function renderSettingsDetail() {
     help: {
       title: "Help Centre",
       copy: "Find answers, contact support, and review community guidance.",
-      body: `<section class="settings-section detail-actions"><button type="button" data-settings-feedback="What is 6dgrs opened">What is 6dgrs<span>Trusted routes through real people</span></button><button type="button" data-settings-feedback="Trusted introductions opened">Trusted Introductions<span>How warm intros work</span></button><button type="button" data-settings-feedback="Trusted Plans opened">Trusted Plans<span>Small hosted meetups</span></button><button type="button" data-settings-feedback="Trips opened">Trips<span>Travel visibility and overlaps</span></button><button type="button" data-settings-feedback="Messaging opened">Messaging<span>Intro, direct and plan chats</span></button><button type="button" data-settings-feedback="Privacy opened">Privacy<span>Control who sees what</span></button><button type="button" data-settings-feedback="Safety opened">Safety<span>Meet with trust</span></button><button type="button" data-settings-feedback="Reporting opened">Reporting<span>Report or block concerns</span></button><button type="button" data-settings-feedback="Verification opened">Verification<span>QR, location and identity</span></button><button type="button" data-settings-feedback="Support request started">Contact Support<span>Message the 6dgrs team</span></button></section>`
+      body: `<section class="settings-section detail-actions"><button type="button" data-settings-feedback="What is 6dgrs opened">What is 6dgrs<span>Trusted routes through real people</span></button><button type="button" data-settings-feedback="Trusted introductions opened">Trusted Introductions<span>How warm intros work</span></button><button type="button" data-settings-feedback="Trusted Plans opened">Trusted Plans<span>Small hosted meetups</span></button><button type="button" data-settings-feedback="Trips opened">Trips<span>Travel visibility and overlaps</span></button><button type="button" data-settings-feedback="Messaging opened">Messaging<span>Intro, direct and plan chats</span></button><button type="button" data-settings-feedback="Privacy opened">Privacy<span>Control who sees what</span></button><button type="button" data-settings-feedback="Safety opened">Safety<span>Meet with trust</span></button><button type="button" data-settings-feedback="Reporting opened">Reporting<span>Report or block concerns</span></button><button type="button" data-settings-feedback="Verification opened">Verification<span>QR, location and identity</span></button><button type="button" data-settings-feedback="Support request started">Contact Support<span>Message the 6dgrs team</span></button></section><section class="safety-card degree-help-card"><h2>Degree Guide</h2><div class="definition-grid"><span><strong>1st</strong>Trusted Friend</span><span><strong>2nd</strong>Friend of a Trusted Friend</span><span><strong>3rd</strong>Friend of a Mutual Connection</span><span><strong>4th</strong>Multiple trust paths</span><span><strong>5th</strong>Extended Network</span><span><strong>6th</strong>Distant Network Connection</span></div></section>`
     },
     terms: {
       title: "Terms of Service",
@@ -2390,6 +2605,94 @@ function displayTrustPath(path = "") {
   return pathParts(path).join(" → ") || path;
 }
 
+const trustLevelOrder = ["Connected", "Shared Plan", "Met", "Vouched", "Trusted Friend"];
+
+function pathDegree(path = "") {
+  const parts = pathParts(path);
+  if (!parts.length) return null;
+  const startIndex = ["You", "Hugo"].includes(parts[0]) ? 0 : -1;
+  return startIndex >= 0 ? Math.min(Math.max(parts.length - 1, 1), 6) : null;
+}
+
+function degreeLabel(degree) {
+  if (!degree) return "";
+  const suffix = degree === 1 ? "st" : degree === 2 ? "nd" : degree === 3 ? "rd" : "th";
+  return `${degree}${suffix} Degree`;
+}
+
+function sharedPlanContextFor(profile = {}, person = {}) {
+  const plans = [
+    ...(profile.plans?.hosting || []),
+    ...(profile.plans?.attending || []),
+    ...(profile.plans?.past || []),
+    ...(person.plans || [])
+  ];
+  return plans.find((plan) => plan.viewerAttended || plan.role === "past" || /Coffee|Gallery|Dinner|Supper|Jazz|Plan/i.test(plan.name || ""));
+}
+
+function profileGalleryFor(profile = {}) {
+  return profile.gallery || [
+    "coffee-walk",
+    "gallery-afternoon",
+    "city-dinner",
+    "design-hotel"
+  ];
+}
+
+function trustSnapshotFor(profile = {}, state = {}) {
+  const trusted = isTrustedConnection(profile.name) ? "Trusted Friend" : `${(profile.vouches || []).length} vouches`;
+  const met = isMetConnection(profile.name) ? "Met in person" : sharedPlanContextFor(profile) ? "Shared plan context" : "Intro path";
+  const hubs = `${new Set([profile.city, profile.homeCity, ...(profile.trips || []).map((trip) => trip.city)].filter(Boolean)).size} active hubs`;
+  return [
+    trusted,
+    met,
+    state.pathCount > 1 ? `${state.pathCount} trust paths` : state.degreeLabel || "Curated visibility",
+    hubs
+  ];
+}
+
+function progressionLedger(type) {
+  appState.progressionLedger = appState.progressionLedger || {};
+  appState.progressionLedger[type] = Array.isArray(appState.progressionLedger[type]) ? appState.progressionLedger[type] : [];
+  return appState.progressionLedger[type];
+}
+
+function recordUniqueProgression(type, key) {
+  const ledger = progressionLedger(type);
+  const normalized = nameKey(key);
+  if (!normalized || ledger.includes(normalized)) return false;
+  ledger.push(normalized);
+  return true;
+}
+
+function hasProgressionRecord(type, key) {
+  return progressionLedger(type).includes(nameKey(key));
+}
+
+function recordUniqueVouch(targetName = "", voucherName = "trusted-circle") {
+  const key = `${voucherName}|${targetName}`;
+  const firstVouch = recordUniqueProgression("vouches", key);
+  if (firstVouch) {
+    trustedFriendState.vouches += 1;
+    addGraphFlag("vouchedConnections", targetName);
+  }
+  return firstVouch;
+}
+
+function relationshipCategoryLabel(state = {}) {
+  if (state.trustLevel === "Trusted Friend" || state.degree === 1) return "Trusted Friend";
+  if (state.trustLevel === "Met" || state.trustLevel === "Vouched" || state.relationship === "Met") return "People You've Met";
+  if (state.degree === 2 || state.degree === 3) return "Mutual Connection";
+  if (state.degree >= 4) return "Extended Network";
+  return state.relationship || "Trusted Network";
+}
+
+function relationshipDisplayLabel(state = {}) {
+  const category = relationshipCategoryLabel(state);
+  if (category === "Trusted Friend" || category === "People You've Met") return category;
+  return [category, state.degreeLabel].filter(Boolean).join(" · ");
+}
+
 const TrustGraphEngine = {
   resolveSubject(userId, options = {}) {
     if (options.profile) return { name: options.profile.name, profile: options.profile, person: null };
@@ -2430,8 +2733,35 @@ const TrustGraphEngine = {
     const subject = this.resolveSubject(userId, options);
     const { name, profile, person } = subject;
     if (!name) return null;
-    if (profile) return this.profileRelationshipState(profile);
-    return this.personRelationshipState(person || { name });
+    const state = profile ? this.profileRelationshipState(profile) : this.personRelationshipState(person || { name });
+    return this.decorateState(subject, state || {});
+  },
+
+  decorateState(subject, state = {}) {
+    const profile = subject.profile || profileForName(subject.name) || {};
+    const person = subject.person || {};
+    const paths = this.subjectPaths(subject);
+    const activePaths = paths.filter((path) => isActiveTrustPath(path, subject.name));
+    const degrees = paths.map(pathDegree).filter(Boolean);
+    const degree = isTrustedConnection(subject.name) ? 1 : (degrees.length ? Math.min(...degrees) : person.degree || null);
+    const hasSharedPlan = Boolean(sharedPlanContextFor(profile, person));
+    let trustLevel = "Connected";
+    if (state.archived) trustLevel = "Archived Path";
+    else if (isTrustedConnection(subject.name)) trustLevel = "Trusted Friend";
+    else if (isMetConnection(subject.name)) trustLevel = isVouchedConnection(subject.name) ? "Vouched" : "Met";
+    else if (isVouchedConnection(subject.name)) trustLevel = "Vouched";
+    else if (hasSharedPlan) trustLevel = "Shared Plan";
+    const degreeText = degreeLabel(degree);
+    return {
+      ...state,
+      trustLevel,
+      degree,
+      degreeLabel: degreeText,
+      pathCount: activePaths.length || paths.length,
+      pathSummary: activePaths.length > 1 ? `${activePaths.length} trust paths available` : state.path,
+      visibility: trustLevel === "Trusted Friend" ? "Full branch" : trustLevel === "Met" || trustLevel === "Vouched" ? "Curated preview" : trustLevel === "Shared Plan" ? "Plan context" : state.locked ? "Locked" : "Intro only",
+      snapshot: trustSnapshotFor(profile, { ...state, pathCount: activePaths.length || paths.length, degreeLabel: degreeText })
+    };
   },
 
   profileRelationshipState(profile) {
@@ -2460,7 +2790,7 @@ const TrustGraphEngine = {
       return {
         state: "direct",
         relationship: directRelationship,
-        path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · wider network stays locked until Trusted Friend",
+        path: directRelationship === "Trusted Friend" ? "Direct trusted connection" : "Met in person · curated network preview",
         canRemove: true,
         removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
         locked: false,
@@ -2505,7 +2835,7 @@ const TrustGraphEngine = {
       return {
         state: "met",
         relationship: "Met",
-        path: "Met in person · network remains locked until Trusted Friend",
+        path: "Met in person · curated network preview",
         locked: false,
         action: "Request Trusted Connection"
       };
@@ -2574,10 +2904,12 @@ const TrustGraphEngine = {
 
   getBranchPeople(userId, city = "") {
     const rootKey = nameKey(this.resolveSubject(userId).name || userId);
+    const subjectName = this.resolveSubject(userId).name || userId;
+    const limit = isMetConnection(subjectName) && !isTrustedConnection(subjectName) ? 3 : 6;
     return cityGraphPeople(city)
       .filter(({ person }) => nameKey(person.name) !== rootKey)
       .filter(({ person }) => pathParts(person.path || profileForName(person.name)?.path || "").some((part) => nameKey(part) === rootKey))
-      .slice(0, 3);
+      .slice(0, limit);
   },
 
   removeTrustedFriend(userId) {
@@ -2611,14 +2943,18 @@ const TrustGraphEngine = {
     const subject = this.resolveSubject(userId);
     const name = subject.name || "Emma Laurent";
     instagramAccessUnlocked = true;
-    trustedFriendState.verifiedMeetups += 1;
+    const firstReward = recordUniqueProgression("meetups", name);
+    if (firstReward) trustedFriendState.verifiedMeetups += 1;
     appState.confirmedMeetups = Array.isArray(appState.confirmedMeetups) ? appState.confirmedMeetups : [];
     addGraphFlag("metConnections", name);
-    appState.confirmedMeetups.unshift({
-      person: name,
-      method,
-      confirmedAt: new Date().toISOString()
-    });
+    if (!appState.confirmedMeetups.some((meetup) => nameKey(meetup.person) === nameKey(name))) {
+      appState.confirmedMeetups.unshift({
+        person: name,
+        method,
+        confirmedAt: new Date().toISOString(),
+        progressionRewarded: firstReward
+      });
+    }
     return { name, state: this.getRelationshipState(name) };
   },
 
@@ -2626,9 +2962,11 @@ const TrustGraphEngine = {
     const subject = this.resolveSubject(userId);
     const name = subject.name;
     if (!name) return null;
+    const alreadyTrusted = isTrustedConnection(name);
     addGraphFlag("trustedConnections", name);
     removeGraphFlag("metConnections", name);
-    if (trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+    if (!alreadyTrusted && trustedFriendState.used < currentTrustedFriendCap()) trustedFriendState.used += 1;
+    recordUniqueProgression("trustedUpgrades", name);
     if (options.notify) addNotificationEvent("acceptedIntro");
     return { name, state: this.getRelationshipState(name) };
   },
@@ -2740,7 +3078,7 @@ function refreshTrustGraphViews() {
   renderNetworkMovement();
   renderNetworkLists();
   renderCityMutuals(document.querySelector("#cityMutualTitle")?.textContent || "Barcelona");
-  renderCityHub(document.querySelector(".city-node.active")?.dataset.city || "Oslo");
+  renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
   renderTrustedPlans();
   renderMyPlans();
   renderPersonPlans();
@@ -2804,6 +3142,17 @@ function planPreviewRow(plan) {
   return `<div class="trip-row"><strong>${role}</strong><span>${plan.name} · ${plan.time}</span></div>`;
 }
 
+function profilePhotoGridMarkup(profile) {
+  return `<section class="content-section"><h2>Photos</h2><div class="profile-photo-grid">${profileGalleryFor(profile).slice(0, 4).map((photo, index) => `<button type="button" class="profile-photo-tile photo-${index + 1}" aria-label="${profile.name} gallery photo ${index + 1}"></button>`).join("")}</div></section>`;
+}
+
+function trustSnapshotMarkup(profile, state) {
+  const rows = state.trustLevel === "Archived Path" || state.locked
+    ? [["Trust level", "Archived Path"], ["Visibility", "Limited"], ["Path", state.path], ["History", "Preserved"]]
+    : [["Trust level", state.trustLevel], ["Visibility", state.visibility], ["Path", state.pathCount > 1 ? `${state.pathCount} paths` : state.degreeLabel || "Direct"], ["Activity", state.snapshot?.at(-1) || "Curated"]];
+  return `<section class="content-section trust-snapshot-section"><h2>Trust Snapshot</h2><div class="profile-meta-grid">${rows.map(([label, value]) => `<span>${label}<strong>${value}</strong></span>`).join("")}</div></section>`;
+}
+
 function renderProfile() {
   const profile = selectedProfile();
   const root = document.querySelector("#profile .scroll-area");
@@ -2827,6 +3176,7 @@ function renderProfile() {
   const activePlans = allPlans.filter((plan) => plan.role !== "past").length;
   const pastPlans = allPlans.filter((plan) => plan.role === "past").length;
   const actionLabel = connectionState.action || (profile.relationship === "Trusted Friend" ? "Message" : profile.relationship === "Met" ? "Request Trusted Connection" : "Request Intro");
+  const relationshipLabel = relationshipDisplayLabel(connectionState);
   const actionTarget = actionLabel === "Message" ? "chat-detail" : "request-intro";
   const isTrustUpgradeAction = actionLabel === "Request Trusted Connection";
   const chatTypeAttr = actionLabel === "Message"
@@ -2841,10 +3191,12 @@ function renderProfile() {
     <div class="cover"></div>
     <section class="profile-head">
       <div class="profile-avatar">${profile.initials}</div><div class="verified">Verified</div>
-      <h1>${profile.name}</h1><span class="trust-badge relationship-badge">${connectionState.relationship}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
+      <h1>${profile.name}</h1><span class="trust-badge relationship-badge" title="${connectionState.degreeLabel || relationshipLabel}">${relationshipLabel}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
       <div class="profile-actions">${primaryAction}<button type="button" data-share-profile>Share Profile</button></div>
     </section>
     <section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${profile.interests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>
+    ${profilePhotoGridMarkup(profile)}
+    ${trustSnapshotMarkup(profile, connectionState)}
     <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips">${upcomingTrips.length ? upcomingTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("") : `<div class="trip-row muted"><strong>No visible trips</strong><span>Nothing visible right now</span></div>`}</div></section>
     <section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>${activePlans} active · ${pastPlans} past</span></div><button data-next="person-plans">View all Plans →</button></div>${allPlans.slice(0, 2).map(planPreviewRow).join("") || `<div class="trip-row muted"><strong>No visible plans</strong><span>No current plan previews</span></div>`}</section>
     <section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>${profile.stats}</p><button data-next="network-map">Open Network Explorer</button></div></section>
@@ -2908,11 +3260,13 @@ function personCard(person, index = 0) {
   const isHomeDiscovery = ["home", "nearby-people"].includes(activeScreenId());
   const parts = pathParts(person.path || "");
   const mutualName = parts.length > 2 ? parts[1] : "";
-  const relationship = pathState?.relationship || (person.badge === "Living here" ? "Lives Here"
+  const relationship = pathState
+    ? relationshipDisplayLabel(pathState)
+    : (person.badge === "Living here" ? "Lives Here"
     : person.badge === "Trusted local" ? "Local Host"
       : person.degree === 2 && mutualName ? `Mutual via ${mutualName}`
         : person.badge);
-  const context = pathState?.path || (person.met
+  const context = pathState?.pathSummary || pathState?.path || (person.met
     ? `${person.path}. Met in person - not yet added to trusted circle.`
     : person.degree === 2 && mutualName
       ? `Visible through ${mutualName}. Request an intro before messaging.`
@@ -2955,6 +3309,8 @@ function chatCard(chat, index, mode = "default") {
     : "";
   const hasPathRoute = chat.path.includes("->") || chat.path.includes("→");
   const chatType = chat.type || (isPlanChat ? (planStatus === "past" ? "Archived Plan Chat" : "Private Plan Chat") : chat.trusted ? "Trusted Friend Chat" : hasPathRoute ? "Direct Connection Chat" : "1:1 Chat");
+  const chatRelationshipState = !isPlanChat && !chat.introRequest && personProfiles[chat.name] ? TrustGraphEngine.getRelationshipState(chat.name) : null;
+  const chatRelationshipLabel = chatRelationshipState ? relationshipDisplayLabel(chatRelationshipState) : "";
   const introActions = chat.introRequest ? `
     <div class="intro-request-actions">
       <button class="primary-mini" type="button" data-introduce>Introduce</button>
@@ -2978,7 +3334,7 @@ function chatCard(chat, index, mode = "default") {
       <div class="avatar online" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
       <div>
         <div class="meta"><h3>${chat.name}</h3><p>${chat.time}</p></div>
-        <span class="trust-badge relationship-badge">${chatType}</span><span class="muted-indicator" ${chat.muted ? "" : "hidden"} aria-label="Muted"></span>
+        <div class="chat-label-row"><span class="chat-type-badge">${chatType}</span>${chatRelationshipLabel ? `<span class="chat-relation-badge">${chatRelationshipLabel}</span>` : ""}<span class="muted-indicator" ${chat.muted ? "" : "hidden"} aria-label="Muted"></span></div>
         <p>${chat.preview}</p>
         ${context ? `<small class="context-copy">${context}</small>` : ""}
         ${introActions}
@@ -4112,43 +4468,488 @@ function branchPeopleFor(name = "", city = "") {
   return TrustGraphEngine.getBranchPeople(name, city);
 }
 
-function updateCityHubCounts() {
-  document.querySelectorAll(".city-node").forEach((node) => {
-    const city = node.dataset.city;
-    const active = visibleCityGraphPeople(city).length;
-    const span = node.querySelector("span");
-    if (span) span.textContent = `${active} active`;
-  });
+function explorerCities() {
+  const preferred = ["London", "Barcelona", "Tokyo", "Oslo", "Paris", "Lisbon"];
+  const discovered = new Set(preferred);
+  [...homePeople, ...networkPeople, ...metPeople, ...secondDegreePeople, ...thirdDegreePeople, ...Object.values(personProfiles).map(graphPersonFromProfile)]
+    .flatMap(personCityNames)
+    .forEach((city) => discovered.add(city));
+  return [...discovered].slice(0, 8);
+}
+
+function networkCategoryFor(person = {}, state = {}) {
+  if (state.archived || state.locked) return "Locked";
+  if (isTrustedConnection(person.name)) return "Trusted Friend";
+  if (isMetConnection(person.name) || person.met) return "People You've Met";
+  if ((state.degree || person.degree || 2) <= 3) return "Mutual Connection";
+  return "Extended Network";
+}
+
+function networkNodeClass(person = {}, state = {}) {
+  if (state.archived || state.locked) return "locked";
+  if (isTrustedConnection(person.name)) return "trusted";
+  if (isVouchedConnection(person.name)) return "vouched";
+  if (isMetConnection(person.name) || person.met) return "met";
+  return "mutual";
+}
+
+function networkDegreeCopy(person = {}, state = {}) {
+  const category = networkCategoryFor(person, state);
+  if (category === "Trusted Friend") return "1st Degree";
+  if (category === "People You've Met") return "Met";
+  return state.degreeLabel || person.badge || degreeLabel(person.degree) || category;
+}
+
+function networkPathSummary(person = {}, state = {}) {
+  if (state.pathCount > 1) return `${state.pathCount} trust paths available`;
+  if (state.archived) return state.path || "Archived path";
+  if (state.locked) return "Locked branch";
+  return state.pathSummary || state.path || person.path || "Visible through your trusted network";
+}
+
+function renderNetworkCityButton(city) {
+  const people = cityGraphPeople(city);
+  const visible = people.filter(({ state }) => !state.locked && !state.archived);
+  const locked = people.length - visible.length;
+  const activeClass = sameCity(city, activeNetworkCity) ? "active" : "";
+  return `
+    <button class="network-city-node ${city.toLowerCase().replace(/\s+/g, "-")} ${activeClass}" type="button" data-network-city="${city}" aria-label="Open ${city} network cluster">
+      <strong>${city}</strong>
+      <span>${visible.length} visible${locked ? ` · ${locked} locked` : ""}</span>
+    </button>
+  `;
+}
+
+function explorerPersonForCity(city) {
+  const people = cityGraphPeople(city);
+  const selected = people.find(({ person }) => nameKey(person.name) === nameKey(activeNetworkPerson));
+  return selected || people.find(({ state }) => !state.locked && !state.archived) || people[0] || null;
+}
+
+function relatedExplorerPeople(focus, city) {
+  if (!focus?.person) return [];
+  const direct = branchPeopleFor(focus.person.name, city);
+  const cityPeople = cityGraphPeople(city).filter(({ person }) => nameKey(person.name) !== nameKey(focus.person.name));
+  const combined = uniquePeopleByName([...direct.map(({ person }) => person), ...cityPeople.map(({ person }) => person)]);
+  return combined.slice(0, 5).map((person) => ({ person, state: connectionStateForPerson(person) || {} }));
+}
+
+function renderExplorerPersonNode(item, index, focusName = "") {
+  const { person, state } = item;
+  const locked = Boolean(state.locked || state.archived);
+  const focused = nameKey(person.name) === nameKey(focusName);
+  const firstName = person.name.split(" ")[0];
+  const city = person.livesIn || person.city || personCityNames(person)[0] || "";
+  return `
+    <button class="network-person-node node-${index + 1} ${networkNodeClass(person, state)} ${focused ? "focused" : ""}" type="button" data-network-person="${person.name}" aria-label="${locked ? "Preview locked" : "Explore"} ${person.name}">
+      <span class="node-avatar">${locked ? "" : firstName.slice(0, 1)}</span>
+      <strong>${locked ? "Locked" : firstName}</strong>
+      <small>${networkDegreeCopy(person, state)}</small>
+      ${city ? `<em>${city}</em>` : ""}
+    </button>
+  `;
+}
+
+function renderCrossCityRoutes(focus) {
+  if (!focus?.person) return "";
+  const cities = personCityNames(focus.person).filter((city) => !sameCity(city, activeNetworkCity)).slice(0, 3);
+  if (!cities.length) return `<div class="cross-city-route muted"><span>No cross-city route yet</span></div>`;
+  return cities.map((city) => `
+    <button class="cross-city-route" type="button" data-network-cross-city="${city}">
+      <span>${activeNetworkCity}</span><i></i><strong>${city}</strong>
+    </button>
+  `).join("");
+}
+
+const trustPathMapLayout = [
+  { name: "You", city: "London", x: 34, y: 47, self: true },
+  { name: "Laura Chen", city: "London", x: 39, y: 37, routeKey: "laura" },
+  { name: "Theo Jensen", city: "Barcelona", x: 30, y: 62, routeKey: "theo" },
+  { name: "Amara Okoye", city: "Lisbon", x: 18, y: 70, routeKey: "amara" },
+  { name: "Emma Laurent", city: "Barcelona", x: 47, y: 58, routeKey: "emma" },
+  { name: "Sofia Marin", city: "Tokyo", x: 75, y: 45, routeKey: "sofia", overlap: true },
+  { name: "Jonas Berg", city: "Oslo", x: 53, y: 24, routeKey: "jonas" },
+  { name: "Mina Aoki", city: "Tokyo", x: 88, y: 64, routeKey: "mina", met: true },
+  { name: "Locked branch", city: "Tokyo", x: 91, y: 36, locked: true, hint: "Unlock through meetup" },
+  { name: "Trusted branch available", city: "Hidden", x: 86, y: 72, locked: true, hint: "Trusted branch available" },
+  { name: "Unlock through meetup", city: "Hidden", x: 72, y: 80, locked: true, hint: "Unlock through meetup" }
+];
+
+const trustPathRoutes = [
+  { className: "route-you-laura", from: "You", to: "Laura Chen", type: "active" },
+  { className: "route-you-theo", from: "You", to: "Theo Jensen", type: "active" },
+  { className: "route-you-amara", from: "You", to: "Amara Okoye", type: "active" },
+  { className: "route-you-mina", from: "You", to: "Mina Aoki", type: "active" },
+  { className: "route-laura-emma", from: "Laura Chen", to: "Emma Laurent", type: "active" },
+  { className: "route-emma-jonas", from: "Emma Laurent", to: "Jonas Berg", type: "active" },
+  { className: "route-emma-sofia", from: "Emma Laurent", to: "Sofia Marin", type: "active overlap" },
+  { className: "route-theo-jonas", from: "Theo Jensen", to: "Jonas Berg", type: "active" },
+  { className: "route-jonas-sofia", from: "Jonas Berg", to: "Sofia Marin", type: "active overlap" },
+  { className: "route-sofia-locked", from: "Sofia Marin", to: "Locked branch", type: "locked" }
+];
+
+const trustFocusBranches = {
+  "Laura Chen": {
+    path: ["You", "Laura Chen"],
+    nearby: ["Emma Laurent", "Locked branch"],
+    routes: ["route-you-laura", "route-laura-emma"],
+    dotted: [],
+    crossCity: "Barcelona"
+  },
+  "Theo Jensen": {
+    path: ["You", "Theo Jensen"],
+    nearby: ["Jonas Berg", "Sofia Marin"],
+    routes: ["route-you-theo", "route-theo-jonas"],
+    dotted: ["route-jonas-sofia"],
+    crossCity: "Oslo"
+  },
+  "Amara Okoye": {
+    path: ["You", "Amara Okoye"],
+    nearby: ["Locked branch"],
+    routes: ["route-you-amara"],
+    dotted: [],
+    crossCity: "Lisbon"
+  },
+  "Emma Laurent": {
+    path: ["You", "Laura Chen", "Emma Laurent"],
+    nearby: ["Sofia Marin", "Jonas Berg"],
+    routes: ["route-you-laura", "route-laura-emma", "route-emma-sofia"],
+    dotted: ["route-jonas-sofia"],
+    crossCity: "Tokyo"
+  },
+  "Sofia Marin": {
+    path: ["You", "Laura Chen", "Emma Laurent", "Jonas Berg", "Sofia Marin"],
+    paths: [
+      ["You", "Laura Chen", "Emma Laurent", "Sofia Marin"],
+      ["You", "Theo Jensen", "Jonas Berg", "Sofia Marin"]
+    ],
+    nearby: ["Theo Jensen", "Emma Laurent", "Jonas Berg", "Locked branch", "Trusted branch available", "Unlock through meetup"],
+    routes: ["route-you-laura", "route-laura-emma", "route-emma-sofia", "route-you-theo", "route-theo-jonas", "route-jonas-sofia"],
+    dotted: ["route-sofia-locked"],
+    crossCity: "London"
+  },
+  "Jonas Berg": {
+    path: ["You", "Theo Jensen", "Jonas Berg"],
+    nearby: ["Sofia Marin", "Emma Laurent"],
+    routes: ["route-you-theo", "route-theo-jonas", "route-jonas-sofia"],
+    dotted: ["route-emma-sofia"],
+    crossCity: "Tokyo"
+  },
+  "Mina Aoki": {
+    path: ["You", "Mina Aoki"],
+    nearby: ["Locked branch"],
+    routes: ["route-you-mina"],
+    dotted: ["route-sofia-locked"],
+    crossCity: "Tokyo"
+  }
+};
+
+function trustMapNodeForName(name = "") {
+  return trustPathMapLayout.find((node) => nameKey(node.name) === nameKey(name)) || trustPathMapLayout[1];
+}
+
+function trustFocusForPerson(name = activeNetworkPerson) {
+  return trustFocusBranches[name] || {
+    path: ["You", name].filter(Boolean),
+    nearby: [],
+    routes: [],
+    dotted: [],
+    crossCity: ""
+  };
+}
+
+function trustFocusNodeNames(name = activeNetworkPerson) {
+  const focus = trustFocusForPerson(name);
+  const pathNames = focus.paths?.flat() || focus.path || [];
+  return new Set(["You", ...pathNames, ...focus.nearby, name].filter(Boolean).map(nameKey));
+}
+
+function trustFocusRouteNames(name = activeNetworkPerson) {
+  const focus = trustFocusForPerson(name);
+  return new Set([...focus.routes, ...focus.dotted]);
+}
+
+function focusNodePosition(node = {}, focusName = activeNetworkPerson) {
+  const focus = trustFocusForPerson(focusName);
+  if (nameKey(node.name) === nameKey(focusName)) return { x: 52, y: 48 };
+  const focusPositions = {
+    "You": { x: 8, y: 54 },
+    "Laura Chen": { x: 22, y: 42 },
+    "Emma Laurent": { x: 36, y: 54 },
+    "Jonas Berg": { x: 69, y: 54 },
+    "Theo Jensen": { x: 52, y: 22 },
+    "Locked branch": { x: 52, y: 76 },
+    "Amara Okoye": { x: 22, y: 68 },
+    "Mina Aoki": { x: 74, y: 67 },
+    "Sofia Marin": { x: 52, y: 48 }
+  };
+  const fallbackIndex = [...trustFocusNodeNames(focusName)].findIndex((item) => item === nameKey(node.name));
+  const fallback = [
+    { x: 20, y: 52 },
+    { x: 35, y: 36 },
+    { x: 35, y: 68 },
+    { x: 70, y: 36 },
+    { x: 78, y: 64 }
+  ][Math.max(0, fallbackIndex)] || { x: node.x, y: node.y };
+  return focus.path.some((name) => nameKey(name) === nameKey(node.name)) || focus.nearby.some((name) => nameKey(name) === nameKey(node.name))
+    ? (focusPositions[node.name] || fallback)
+    : { x: node.x, y: node.y };
+}
+
+function trustMapSubject(node = {}) {
+  if (node.self) {
+    return {
+      person: { name: "You", city: node.city, badge: "You", degree: 0 },
+      state: { relationship: "You", trustLevel: "You", degreeLabel: "Start", path: "Your trusted network starts here.", pathCount: 1 }
+    };
+  }
+  if (node.locked) {
+    return {
+      person: { name: node.name, city: node.city, badge: "Locked", degree: 5, locked: true },
+      state: { locked: true, relationship: node.hint || "Locked branch", degreeLabel: "Hidden", path: "Build trust to reveal this branch.", pathCount: 0 }
+    };
+  }
+  const rawPerson = profileForName(node.name) || [...homePeople, ...networkPeople, ...metPeople, ...secondDegreePeople, ...thirdDegreePeople].find((item) => nameKey(item.name) === nameKey(node.name)) || { name: node.name, city: node.city, degree: 2 };
+  const person = {
+    ...rawPerson,
+    city: node.city || rawPerson.city,
+    plans: Array.isArray(rawPerson.plans) ? rawPerson.plans : []
+  };
+  const state = TrustGraphEngine.getRelationshipState(person.name, { person }) || {};
+  return { person, state };
+}
+
+function trustMapInitials(name = "") {
+  if (name === "You") return "You";
+  if (name === "Locked branch" || name === "Trusted branch available" || name === "Unlock through meetup") return "🔒";
+  return name.split(" ").map((part) => part[0]).join("").slice(0, 2);
+}
+
+function trustPathForPerson(name = activeNetworkPerson) {
+  const paths = {
+    "Laura Chen": "You → Laura",
+    "Theo Jensen": "You → Theo",
+    "Amara Okoye": "You → Amara",
+    "Emma Laurent": "You → Laura → Emma",
+    "Sofia Marin": "You → Laura → Emma → Sofia",
+    "Jonas Berg": "You → Theo → Jonas",
+    "Mina Aoki": "You → Mina"
+  };
+  return paths[name] || TrustGraphEngine.getTrustPath(name)?.display || "Visible through your trusted network";
+}
+
+function trustFocusPathCopy(name = activeNetworkPerson) {
+  const focus = trustFocusForPerson(name);
+  const path = focus.path?.length ? focus.path : ["You", name].filter(Boolean);
+  return path.map((item) => item === "You" ? "You" : item.split(" ")[0]).join(" → ");
+}
+
+function trustFocusPathsForPerson(name = activeNetworkPerson) {
+  const focus = trustFocusForPerson(name);
+  return focus.paths?.length ? focus.paths : [focus.path?.length ? focus.path : ["You", name].filter(Boolean)];
+}
+
+function explorerActionForFocus(focusNode = {}) {
+  const { state } = trustMapSubject(focusNode);
+  if (focusNode.locked || state.locked) return { type: "unlock", label: "How To Unlock" };
+  if (focusNode.self) return { type: "branch", label: "View Full Branch" };
+  if (isTrustedConnection(focusNode.name) || state.relationship === "Trusted Friend" || state.trustLevel === "Trusted Friend") {
+    return { type: "message-profile", labels: ["Message", "View Profile"] };
+  }
+  if (isMetConnection(focusNode.name) || state.relationship === "Met" || state.trustLevel === "Met") {
+    return { type: "message-trust", labels: ["Message", "Request Trusted Connection"] };
+  }
+  return { type: "intro-profile", labels: ["Request Introduction", "View Profile"] };
+}
+
+function renderFocusPathChain(name = activeNetworkPerson) {
+  const paths = trustFocusPathsForPerson(name);
+  if (paths.length > 1) {
+    return `
+      <div class="focus-path-chain path-count-summary" aria-label="Multiple trust paths">
+        <strong>${paths.length} Trust Paths Found</strong>
+        <span>Branches reconnect at ${name.split(" ")[0]}</span>
+      </div>
+    `;
+  }
+  return `
+    <div class="focus-path-chain" aria-label="Active trust path">
+      ${paths.map((path) => `
+        <div class="focus-chain-row">
+          ${path.map((item, index) => {
+            const isSelected = nameKey(item) === nameKey(name);
+            const isStart = item === "You";
+            return `
+              <button class="focus-chain-node ${isSelected ? "selected" : ""} ${isStart ? "start" : ""}" type="button" ${isStart ? "" : `data-network-person="${item}"`}>
+                <span>${trustMapInitials(item)}</span>
+                <strong>${isStart ? "You" : item.split(" ")[0]}</strong>
+              </button>
+              ${index < path.length - 1 ? `<i class="focus-chain-link"></i>` : ""}
+            `;
+          }).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderDrawerPathRows(name = activeNetworkPerson) {
+  const paths = trustFocusPathsForPerson(name);
+  return `
+    <details class="drawer-paths">
+      <summary>${paths.length} ${paths.length === 1 ? "Trust Path" : "Trust Paths"} Found</summary>
+      <div>
+        ${paths.map((path, index) => `
+          <article>
+            <span>Path ${String.fromCharCode(65 + index)}</span>
+            <strong>${path.map((item) => item === "You" ? "You" : item.split(" ")[0]).join(" → ")}</strong>
+          </article>
+        `).join("")}
+      </div>
+    </details>
+  `;
+}
+
+function renderExplorerActions(focusNode = {}) {
+  const action = explorerActionForFocus(focusNode);
+  if (action.type === "unlock") {
+    return `<button type="button" data-explore-branch="${focusNode.name}" data-explorer-action="unlock">How To Unlock</button>`;
+  }
+  if (action.labels?.length) {
+    const [primary, secondary] = action.labels;
+    const primaryAttr = action.type.includes("message")
+      ? `data-message-person="${focusNode.name}"`
+      : `data-explore-branch="${focusNode.name}" data-explorer-action="intro"`;
+    const secondaryAttr = action.type.includes("trust")
+      ? `data-trust-upgrade="${focusNode.name}"`
+      : `data-view-network-profile="${focusNode.name}"`;
+    return `
+      <button type="button" ${primaryAttr}>${primary}</button>
+      <button type="button" ${secondaryAttr}>${secondary}</button>
+    `;
+  }
+  return `<button type="button" data-explore-branch="${focusNode.name}" data-explorer-action="branch">${action.label}</button>`;
+}
+
+function trustMapDegreeFor(node = {}, state = {}) {
+  if (node.self) return "Start";
+  if (node.locked) return "Locked";
+  if (node.name === "Sofia Marin") return "4th Degree";
+  if (node.name === "Jonas Berg") return "3rd Degree";
+  return relationshipDisplayLabel(state) || networkDegreeCopy({ name: node.name }, state);
+}
+
+function trustMapNodeMarkup(node, options = {}) {
+  const { person, state } = trustMapSubject(node);
+  const selected = nameKey(node.name) === nameKey(activeNetworkPerson);
+  const focusMode = options.mode !== "map";
+  const focusVisible = options.focusNodes?.has(nameKey(node.name));
+  const branchVisible = focusMode && focusVisible && !selected && !node.self;
+  const hidden = focusMode && !focusVisible;
+  const visible = !hidden;
+  const position = focusMode ? focusNodePosition(node, activeNetworkPerson) : { x: node.x, y: node.y };
+  const className = [
+    "trust-map-node",
+    node.self ? "self" : "",
+    node.locked || state.locked ? "locked" : networkNodeClass(person, state),
+    selected ? "selected" : "",
+    branchVisible ? "branch-visible" : "",
+    node.locked ? "locked-potential" : "",
+    visible ? "" : "focus-hidden"
+  ].filter(Boolean).join(" ");
+  return `
+    <button class="${className}" style="--x:${position.x}%;--y:${position.y}%;" type="button" ${node.locked ? `data-locked-network="${node.city}"` : `data-network-person="${node.name}"`} aria-label="${node.locked ? "Locked branch" : `Select ${node.name}`}">
+      <span>${trustMapInitials(node.name)}</span>
+      <strong>${node.locked ? (node.hint || "Locked") : node.self ? "You" : node.name.split(" ")[0]}</strong>
+      <em>${node.locked ? "Hidden" : node.city}</em>
+    </button>
+  `;
+}
+
+function trustRouteMarkup(route, mode = activeExplorerMode) {
+  const focusMode = mode !== "map";
+  const focus = trustFocusForPerson(activeNetworkPerson);
+  const relevant = trustFocusRouteNames(activeNetworkPerson).has(route.className);
+  const dotted = focus.dotted?.includes(route.className) || route.type.includes("locked");
+  const highlighted = focusMode ? relevant && !dotted : activeNetworkPerson && [route.from, route.to].some((name) => nameKey(name) === nameKey(activeNetworkPerson));
+  const hidden = focusMode && !relevant;
+  return `<i class="trust-route ${route.className} ${route.type} ${dotted ? "dotted" : ""} ${highlighted ? "highlighted" : ""} ${hidden ? "route-hidden" : ""}"></i>`;
+}
+
+function renderTrustPathMapCanvas(mode = activeExplorerMode) {
+  const focusMode = mode !== "map";
+  const selectedNode = trustMapNodeForName(activeNetworkPerson);
+  const focus = trustFocusForPerson(activeNetworkPerson);
+  const focusNodes = trustFocusNodeNames(activeNetworkPerson);
+  const routeCopy = focusMode ? trustFocusPathCopy(activeNetworkPerson) : "Tap a person to reveal one branch at a time";
+  return `
+    <div class="trust-path-map-canvas ${focusMode ? "focus-mode" : ""} ${mode === "branch" ? "branch-mode" : ""}" data-active-city="${activeNetworkCity}">
+      <span class="continent continent-europe"></span><span class="continent continent-africa"></span><span class="continent continent-asia"></span>
+      ${trustPathRoutes.map((route) => trustRouteMarkup(route, mode)).join("")}
+      ${trustPathMapLayout.map((node) => trustMapNodeMarkup(node, { mode, focusNodes })).join("")}
+      ${focusMode && focus.crossCity ? `<button class="follow-branch-path" type="button" data-network-cross-city="${focus.crossCity}"><span>Follow branch</span><strong>to ${focus.crossCity}</strong></button>` : ""}
+      ${focusMode ? renderFocusPathChain(activeNetworkPerson) : ""}
+      ${focusMode ? `<button class="world-view-button" type="button" data-trust-map-world>← World View</button>` : ""}
+      <div class="trust-map-caption"><strong>${focusMode ? "Focused on " + selectedNode.name.split(" ")[0] : "Trust Paths"}</strong><span>${routeCopy}</span></div>
+      <div class="trust-map-legend"><span>Solid: active path</span><span>Dotted: locked or cross-city</span></div>
+    </div>
+  `;
+}
+
+function renderExplorerBottomSheet(focusNode = trustMapNodeForName(activeNetworkPerson), mode = activeExplorerMode) {
+  const { state } = trustMapSubject(focusNode);
+  const drawerExpanded = networkDrawerState === "expanded";
+  if (mode === "map") {
+    return `
+      <div class="trust-path-sheet compact drawer-collapsed" data-network-drawer="collapsed">
+        <button class="drawer-handle" type="button" data-network-drawer-toggle aria-label="Expand network drawer"><span></span></button>
+        <div class="drawer-summary" data-network-drawer-toggle>
+          <span>Network Explorer</span>
+          <h2>Explore trust paths</h2>
+          <p>Tap a person to reveal how they connect back to you.</p>
+        </div>
+      </div>
+    `;
+  }
+  const path = trustFocusPathCopy(focusNode.name).replace(/^You → /, "");
+  const overlap = focusNode.name === "Sofia Marin";
+  const pathCount = trustFocusPathsForPerson(focusNode.name).length;
+  return `
+    <div class="trust-path-sheet trust-drawer ${mode === "branch" ? "branch-sheet" : ""} ${drawerExpanded ? "drawer-expanded" : "drawer-collapsed"}" data-network-drawer="${networkDrawerState}">
+      <button class="drawer-handle" type="button" data-network-drawer-toggle aria-label="${drawerExpanded ? "Collapse" : "Expand"} network drawer" aria-expanded="${drawerExpanded}"><span></span></button>
+      <div class="sheet-person-row" data-network-drawer-toggle>
+        <span class="sheet-avatar">${trustMapInitials(focusNode.name)}</span>
+        <div><h2>${focusNode.name}</h2><p>${trustMapDegreeFor(focusNode, state)} · ${pathCount} ${pathCount === 1 ? "trust path" : "trust paths"}</p></div>
+      </div>
+      <div class="drawer-expanded-content">
+        <div class="visual-path"><span>You</span><i></i><strong>${path}</strong></div>
+        ${overlap ? `<div class="overlap-discovery"><strong>${pathCount} Trust Paths Overlap</strong><span>Laura's branch and Theo's branch both reconnect through ${focusNode.name.split(" ")[0]}.</span></div>` : ""}
+        ${renderDrawerPathRows(focusNode.name)}
+        <div class="drawer-context-row">
+          <span>${focusNode.city}</span>
+          <span>${relationshipDisplayLabel(state) || "Trusted Network"}</span>
+        </div>
+        <div class="sheet-actions">
+          ${renderExplorerActions(focusNode)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderNetworkExplorer(city = activeNetworkCity, personName = activeNetworkPerson) {
+  activeNetworkCity = city || "London";
+  const world = document.querySelector("#globalNetworkMap");
+  const graph = document.querySelector("#networkGraphCard");
+  if (!world || !graph) return;
+  if (personName) activeNetworkPerson = personName;
+  const focusNode = trustMapNodeForName(activeNetworkPerson);
+  world.innerHTML = renderTrustPathMapCanvas(activeExplorerMode);
+  graph.innerHTML = renderExplorerBottomSheet(focusNode, activeExplorerMode);
 }
 
 function renderCityHub(city = "Oslo") {
-  updateCityHubCounts();
-  const card = document.querySelector(".cluster-card");
-  if (!card) return;
-  const people = cityGraphPeople(city);
-  const active = people.filter(({ state }) => !state.locked && !state.archived);
-  const locked = people.filter(({ state }) => state.locked || state.archived);
-  const slots = card.querySelectorAll("[data-cluster-person]");
-  const displayPeople = [...active, ...locked].slice(0, slots.length);
-  slots.forEach((slot, index) => {
-    const item = displayPeople[index];
-    if (!item) {
-      slot.hidden = true;
-      return;
-    }
-    const firstName = item.person.name.split(" ")[0];
-    const lockedState = Boolean(item.state.locked || item.state.archived);
-    slot.hidden = false;
-    slot.textContent = firstName;
-    slot.dataset.clusterPerson = item.person.name;
-    slot.dataset.networkState = item.state.archived ? "archived" : lockedState ? "locked" : "unlocked";
-    slot.classList.toggle("locked", lockedState);
-    slot.setAttribute("aria-label", `${lockedState ? "Preview" : "Open"} ${firstName}'s ${city} branch`);
-  });
-  const title = card.querySelector("p strong");
-  const copy = card.querySelector("p span");
-  if (title) title.textContent = `${city} trusted hub`;
-  if (copy) copy.textContent = `${active.length} active ${active.length === 1 ? "path" : "paths"} · ${locked.length} locked or archived ${locked.length === 1 ? "branch" : "branches"}.`;
+  renderNetworkExplorer(city, activeNetworkPerson);
 }
 
 function renderCityMutuals(city) {
@@ -4166,45 +4967,6 @@ function renderCityMutuals(city) {
       : emptyState("No active paths in this city", "Reconnect a trusted route, confirm a meetup, or add a trip to open this hub.");
   }
   updateCityHubCounts();
-}
-
-function renderClusterNetwork(name, state) {
-  const card = document.querySelector(".cluster-card");
-  const panel = document.querySelector("#personNetworkPanel");
-  if (!card || !panel) return;
-  const activeCity = document.querySelector(".city-node.active")?.dataset.city || "Oslo";
-  const network = clusterNetworks[name] || { state, path: "Trusted path pending", people: [] };
-  const profileName = profileForName(name)?.name || name;
-  const isArchived = isRemovedName(profileName);
-  const personState = profileForName(name) ? connectionStateForProfile(profileForName(name)) : null;
-  const isMetOnly = isMetConnection(profileName) && !isTrustedConnection(profileName);
-  const isLocked = isArchived || personState?.locked || isMetOnly || (network.state || state) === "locked";
-  const branch = branchPeopleFor(profileName, activeCity);
-  const branchNames = branch.length ? branch.map(({ person, state: branchState }) => ({ name: person.name.split(" ")[0], locked: Boolean(branchState.locked || branchState.archived) })) : network.people.map((person) => ({ name: person, locked: isLocked }));
-  const title = isArchived ? "Archived path" : isMetOnly ? "Met connection" : isLocked ? "Locked network" : `${profileName.split(" ")[0]}'s branch`;
-  const description = isArchived
-    ? `Previously connected via ${profileName}. Reconnection can reopen this branch.`
-    : isMetOnly
-      ? `${profileName.split(" ")[0]} is Met. Their wider network stays locked until you both become Trusted Friends.`
-      : isLocked
-        ? `${profileName.split(" ")[0]}'s wider circle needs an active trust path before it opens.`
-        : `${personState?.relationship || network.path} · ${branchNames.length || 1} visible ${branchNames.length === 1 ? "route" : "routes"} in ${activeCity}.`;
-  card.classList.add("has-network");
-  card.querySelectorAll("[data-cluster-person]").forEach((person) => {
-    person.classList.toggle("focused", person.dataset.clusterPerson === name);
-  });
-  panel.innerHTML = `
-    <div class="person-network-card ${isLocked ? "locked-preview" : "unlocked-preview"}">
-      <div>
-        <strong>${title}</strong>
-        <span>${description}</span>
-      </div>
-      <div class="micro-network" aria-label="${name}'s network preview">
-        ${branchNames.slice(0, 3).map((person) => `<span class="micro-node ${person.locked ? "locked-micro-node" : ""}">${isLocked || person.locked ? "" : person.name}</span>`).join("") || `<span class="micro-node"></span><span class="micro-node"></span>`}
-      </div>
-      <button class="network-action" ${isArchived ? `type="button" data-request-reconnect="${profileName}"` : isLocked ? `type="button" data-profile-name="${profileName}" data-next="request-intro"` : `type="button" data-profile-name="${profileName}" data-next="profile"`}>${isArchived ? "Request Reconnection" : isLocked ? "Request Intro" : "Open Profile"}</button>
-    </div>
-  `;
 }
 
 function renderIntroMethod(method = "mutual") {
@@ -4317,6 +5079,8 @@ function syncGenderSelfDescribe(select) {
 function hydrateLists() {
   renderOnboardingCarousel();
   startOnboardingAutoPlay();
+  renderCountryCodePicker();
+  syncTripPurposeDetail();
   syncGenderSelfDescribe(document.querySelector("#basicGender"));
   syncGenderSelfDescribe(document.querySelector("#editProfileGender"));
   renderHomePeople();
@@ -4334,17 +5098,6 @@ function hydrateLists() {
   syncSettingsRows();
 }
 
-function closeCluster() {
-  const sky = document.querySelector(".city-sky");
-  if (!sky) return;
-  sky.classList.remove("expanded");
-  const card = document.querySelector(".cluster-card");
-  card?.classList.remove("open", "has-network");
-  document.querySelector("#personNetworkPanel")?.replaceChildren();
-  document.querySelectorAll("[data-cluster-person]").forEach((person) => person.classList.remove("focused"));
-  document.querySelectorAll(".city-node").forEach((node) => node.classList.remove("active"));
-}
-
 function bindInteractions() {
   document.querySelector("#homeSearch")?.addEventListener("input", () => {
     renderHomePeople();
@@ -4354,6 +5107,20 @@ function bindInteractions() {
   document.querySelector("#networkSearch")?.addEventListener("input", renderNetworkLists);
   document.querySelector("#basicGender")?.addEventListener("change", (event) => syncGenderSelfDescribe(event.target));
   document.querySelector("#editProfileGender")?.addEventListener("change", (event) => syncGenderSelfDescribe(event.target));
+  document.querySelector("#tripPurpose")?.addEventListener("change", () => {
+    syncTripPurposeDetail();
+    captureOnboardingDraft("trip");
+    persistPrototypeState();
+  });
+  document.querySelector("[data-country-picker]")?.addEventListener("click", () => {
+    const isOpen = document.querySelector("#countryCodeMenu")?.hidden === false;
+    toggleCountryMenu(!isOpen);
+  });
+  document.querySelector("#countryCodeSearch")?.addEventListener("input", (event) => renderCountryCodePicker(event.target.value));
+  document.querySelector("#signupPhoneNumber")?.addEventListener("input", () => {
+    syncSignupPhoneState();
+    persistPrototypeState();
+  });
   let swipeBackStart = null;
   let notificationSwipeStart = null;
 
@@ -4395,6 +5162,17 @@ function bindInteractions() {
     const screen = event.target.closest(".screen");
     if (screen && dirtyScreens.has(screen.dataset.screen) && !event.target.closest("#homeSearch")) {
       screen.dataset.dirty = "true";
+      captureOnboardingDraft(screen.dataset.screen);
+      persistPrototypeState();
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const screen = event.target.closest(".screen");
+    if (screen && dirtyScreens.has(screen.dataset.screen)) {
+      screen.dataset.dirty = "true";
+      captureOnboardingDraft(screen.dataset.screen);
+      persistPrototypeState();
     }
   });
 
@@ -4412,6 +5190,11 @@ function bindInteractions() {
   });
 
   document.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-network-drawer-toggle]")) {
+      networkDrawerDragStartY = event.clientY;
+      return;
+    }
+
     const notificationContent = event.target.closest("#notifications .notification-swipe-content");
     if (notificationContent && !event.target.closest("button, a, input, textarea, select")) {
       const card = notificationContent.closest("[data-notification-card]");
@@ -4479,6 +5262,17 @@ function bindInteractions() {
       card.classList.remove("is-swiped");
     }
 
+    if (networkDrawerDragStartY !== null) {
+      const deltaY = event.clientY - networkDrawerDragStartY;
+      networkDrawerDragStartY = null;
+      if (Math.abs(deltaY) > 22) {
+        networkDrawerState = deltaY < 0 ? "expanded" : "collapsed";
+        networkDrawerSuppressClick = true;
+        renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+        return;
+      }
+    }
+
     if (!swipeBackStart) return;
     const deltaX = event.clientX - swipeBackStart.x;
     const deltaY = Math.abs(event.clientY - swipeBackStart.y);
@@ -4487,6 +5281,32 @@ function bindInteractions() {
   });
 
   document.addEventListener("click", (event) => {
+    const drawerToggle = event.target.closest("[data-network-drawer-toggle]");
+    if (drawerToggle) {
+      if (networkDrawerSuppressClick) {
+        networkDrawerSuppressClick = false;
+        return;
+      }
+      networkDrawerState = networkDrawerState === "expanded" ? "collapsed" : "expanded";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      return;
+    }
+
+    const countryOption = event.target.closest("[data-country-code-option]");
+    if (countryOption) {
+      appState.signup.countryCode = countryOption.dataset.countryCodeOption;
+      appState.signup.countryName = countryOption.dataset.countryName;
+      appState.signup.flag = countryOption.dataset.countryFlag;
+      syncSignupPhoneState();
+      renderCountryCodePicker();
+      toggleCountryMenu(false);
+      persistPrototypeState();
+      return;
+    }
+    if (!event.target.closest(".international-phone-auth")) {
+      toggleCountryMenu(false);
+    }
+
     const profileMenuToggle = event.target.closest("[data-profile-menu]");
     const profileMenu = document.querySelector("#profileMenu");
     if (profileMenuToggle) {
@@ -4541,6 +5361,7 @@ function bindInteractions() {
       introThreadLeft = false;
       appState.introRequestAccepted = true;
       appState.pendingIntroRequestActive = false;
+      recordUniqueProgression("introductions", "Hugo|Emma|Laura");
       addNotificationEvent("introChat");
       persistPrototypeState();
       activeChatDetailMode = "intro-group";
@@ -4822,6 +5643,7 @@ function bindInteractions() {
         if (accepted && group === "intro") {
           introThreadStarted = true;
           appState.pendingIntroRequestActive = false;
+          recordUniqueProgression("introductions", `${request.name}|Hugo|Laura`);
           upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         }
       }
@@ -4848,7 +5670,11 @@ function bindInteractions() {
       planRequestResponse.textContent = accepted ? "Accepted" : "Rejected";
       planRequestResponse.disabled = true;
       const requestIndex = Number(planRequestResponse.dataset.planRequestIndex);
-      if (!Number.isNaN(requestIndex)) planJoinRequests.splice(requestIndex, 1);
+      if (!Number.isNaN(requestIndex)) {
+        const request = planJoinRequests[requestIndex];
+        if (accepted && request?.vouch?.includes("Vouched by")) recordUniqueVouch(request.name, request.vouch.replace("Vouched by", "").trim());
+        planJoinRequests.splice(requestIndex, 1);
+      }
       syncPlanRequestCounts();
       persistPrototypeState();
       showUtilityFeedback(accepted ? "Request accepted" : "Request rejected", accepted ? "They can now enter the plan chat." : "The join request has been rejected.");
@@ -5071,15 +5897,88 @@ function bindInteractions() {
       return;
     }
 
-    const close = event.target.closest("[data-close-cluster]");
-    if (close) {
-      closeCluster();
+    const trustMapWorld = event.target.closest("[data-trust-map-world]");
+    if (trustMapWorld) {
+      activeExplorerMode = "map";
+      activeNetworkCity = "London";
+      activeNetworkPerson = "Laura Chen";
+      previousExplorerPerson = "";
+      networkDrawerState = "collapsed";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
       return;
     }
 
-    const clusterPerson = event.target.closest("[data-cluster-person]");
-    if (clusterPerson) {
-      renderClusterNetwork(clusterPerson.dataset.clusterPerson, clusterPerson.dataset.networkState);
+    const networkCity = event.target.closest("[data-network-city]");
+    if (networkCity) {
+      activeNetworkCity = networkCity.dataset.networkCity;
+      activeNetworkPerson = explorerPersonForCity(activeNetworkCity)?.person?.name || activeNetworkPerson;
+      activeExplorerMode = "map";
+      networkDrawerState = "collapsed";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      return;
+    }
+
+    const networkPerson = event.target.closest("[data-network-person]");
+    if (networkPerson) {
+      previousExplorerPerson = activeNetworkPerson;
+      activeNetworkPerson = networkPerson.dataset.networkPerson;
+      activeExplorerMode = "selected";
+      const node = trustMapNodeForName(activeNetworkPerson);
+      const person = profileForName(activeNetworkPerson) || [...homePeople, ...networkPeople, ...metPeople, ...secondDegreePeople, ...thirdDegreePeople].find((item) => nameKey(item.name) === nameKey(activeNetworkPerson));
+      if (person) {
+        const cities = personCityNames(person);
+        if (!cities.some((city) => sameCity(city, activeNetworkCity))) activeNetworkCity = node.city || cities[0] || activeNetworkCity;
+      } else if (node?.city) {
+        activeNetworkCity = node.city;
+      }
+      networkDrawerState = "collapsed";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      return;
+    }
+
+    const exploreBranch = event.target.closest("[data-explore-branch]");
+    if (exploreBranch) {
+      const action = exploreBranch.dataset.explorerAction || "branch";
+      previousExplorerPerson = activeNetworkPerson;
+      activeNetworkPerson = exploreBranch.dataset.exploreBranch;
+      const node = trustMapNodeForName(activeNetworkPerson);
+      activeNetworkCity = node.city || activeNetworkCity;
+      if (action === "intro") {
+        selectedProfileName = activeNetworkPerson;
+        introMethod = "mutual";
+        showScreen("request-intro");
+        return;
+      }
+      if (action === "unlock") {
+        showUtilityFeedback("How to unlock", "Meet, get vouched for, or reconnect through a trusted path to reveal this branch.");
+        renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+        return;
+      }
+      activeExplorerMode = "branch";
+      networkDrawerState = "expanded";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      return;
+    }
+
+    const viewNetworkProfile = event.target.closest("[data-view-network-profile]");
+    if (viewNetworkProfile) {
+      selectedProfileName = viewNetworkProfile.dataset.viewNetworkProfile;
+      showScreen("profile");
+      return;
+    }
+
+    const crossCity = event.target.closest("[data-network-cross-city]");
+    if (crossCity) {
+      activeNetworkCity = crossCity.dataset.networkCrossCity;
+      activeExplorerMode = "branch";
+      networkDrawerState = "collapsed";
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      return;
+    }
+
+    const lockedNetwork = event.target.closest("[data-locked-network]");
+    if (lockedNetwork) {
+      showUtilityFeedback("Locked branch", "Build trust through intros, plans, vouches, or verified meetups to reveal more of this network.");
       return;
     }
 
@@ -5209,6 +6108,15 @@ function bindInteractions() {
       return;
     }
 
+    const mediaAction = event.target.closest("[data-media-action]");
+    if (mediaAction) {
+      const action = mediaAction.dataset.mediaAction;
+      appState.profileMediaUpdatedAt = new Date().toISOString();
+      persistPrototypeState();
+      showUtilityFeedback("Media updated", `${action.charAt(0).toUpperCase()}${action.slice(1)} is saved locally in this prototype.`);
+      return;
+    }
+
     const appearanceChoice = event.target.closest("[data-appearance-choice]");
     if (appearanceChoice) {
       settingsState.appearance = appearanceChoice.dataset.appearanceChoice;
@@ -5284,7 +6192,10 @@ function bindInteractions() {
         homeTrips.unshift({ id: `developer-overlap-${Date.now()}`, city: "Barcelona", country: "Spain", start: "2026-11-10", end: "2026-11-14", visibility: "trusted network only", status: "Trip overlap" });
         addNotificationEvent("tripOverlap");
       }
-      if (action === "notifications") notificationItems.forEach((item) => { item.active = true; });
+      if (action === "notifications") {
+        notificationItems.forEach((item) => { item.active = true; });
+        ["trustedFriendArriving", "mutualOverlap", "sharedDestination", "trustedPlanOverlap"].forEach(addNotificationEvent);
+      }
       if (action === "trips") {
         appState.generatedTrips += 1;
         myTrips.unshift({ id: `developer-trip-${Date.now()}`, city: "Madrid", country: "Spain", start: "2026-09-12", end: "2026-09-15", visibility: "trusted network only", status: "Developer trip" });
@@ -5417,12 +6328,15 @@ function bindInteractions() {
         }
         if (item.kind === "plan") {
           const requestIndex = planJoinRequests.findIndex((request) => request.name === item.profile);
+          const request = requestIndex >= 0 ? planJoinRequests[requestIndex] : null;
+          if (accepted && request?.vouch?.includes("Vouched by")) recordUniqueVouch(request.name, request.vouch.replace("Vouched by", "").trim());
           if (requestIndex >= 0) planJoinRequests.splice(requestIndex, 1);
           syncPlanRequestCounts();
         }
         if (accepted && item.kind === "intro") {
           introThreadStarted = true;
           appState.pendingIntroRequestActive = false;
+          recordUniqueProgression("introductions", `${item.profile || "Emma"}|Hugo|Laura`);
           upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         }
         if (!accepted && item.kind === "intro") {
@@ -5462,24 +6376,12 @@ function bindInteractions() {
       return;
     }
 
-    const city = event.target.closest(".city-node");
-    if (city) {
-      const sky = document.querySelector(".city-sky");
-      const card = document.querySelector(".cluster-card");
-      sky.classList.add("expanded");
-      document.querySelectorAll(".city-node").forEach((node) => node.classList.remove("active"));
-      city.classList.add("active");
-      card.classList.add("open");
-      card.classList.remove("has-network");
-      document.querySelector("#personNetworkPanel")?.replaceChildren();
-      document.querySelectorAll("[data-cluster-person]").forEach((person) => person.classList.remove("focused"));
-      renderCityHub(city.dataset.city);
-      return;
-    }
-
-    const sky = event.target.closest(".city-sky.expanded");
-    if (sky && !event.target.closest(".cluster-card, .map-bottom, .map-top, .bottom-nav")) {
-      closeCluster();
+    const notificationCity = event.target.closest("[data-notification-city]");
+    if (notificationCity) {
+      activeNetworkCity = notificationCity.dataset.notificationCity || activeNetworkCity;
+      activeNetworkPerson = explorerPersonForCity(activeNetworkCity)?.name || activeNetworkPerson;
+      markNotificationViewedFromElement(notificationCity);
+      showScreen("network-map");
       return;
     }
 
@@ -5589,6 +6491,8 @@ function bindInteractions() {
       }
       selectable.classList.toggle("selected");
       selectable.blur();
+      captureOnboardingDraft(selectable.closest(".screen")?.dataset.screen);
+      persistPrototypeState();
     }
 
     const single = event.target.closest(".single-select .option-card");
@@ -5601,6 +6505,8 @@ function bindInteractions() {
       single.setAttribute("aria-pressed", "true");
       if (single.dataset.verifyMethod) renderVerification(single.dataset.verifyMethod);
       if (single.dataset.introMethod) renderIntroMethod(single.dataset.introMethod);
+      captureOnboardingDraft(single.closest(".screen")?.dataset.screen);
+      persistPrototypeState();
     }
 
     const toggle = event.target.closest(".exclusive-toggles .toggle-card");

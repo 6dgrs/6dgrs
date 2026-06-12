@@ -13,7 +13,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/logo-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/logo-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=91" />
+    <link rel="stylesheet" href="./styles.css?v=96" />
   </head>
   <body>
     <main class="phone-shell" aria-label="6dgrs mobile app prototype">
@@ -27,11 +27,15 @@
           <p>Meet trusted people around the world through friends-of-friends, mutual connections, and small plans.</p>
         </div>
         <div class="welcome-actions" id="welcomeAuth">
-          <label class="auth-input phone-auth">
-            <span class="icon phone-icon"></span>
-            <input type="tel" inputmode="tel" autocomplete="tel" placeholder="Phone number" aria-label="Phone number" />
-            <button type="button" data-next="onboarding-intro" aria-label="Continue with phone">Continue</button>
-          </label>
+          <div class="auth-input phone-auth international-phone-auth">
+            <button type="button" class="country-code-button" data-country-picker aria-expanded="false" aria-controls="countryCodeMenu"><span data-country-flag>🇬🇧</span><strong data-country-code>+44</strong></button>
+            <input type="tel" id="signupPhoneNumber" inputmode="tel" autocomplete="tel-national" placeholder="Phone number" aria-label="Phone number" />
+            <button type="button" data-next="onboarding-intro" data-phone-continue aria-label="Continue with phone">Continue</button>
+            <div class="country-code-menu" id="countryCodeMenu" hidden>
+              <input type="search" id="countryCodeSearch" placeholder="Search country" aria-label="Search country code" />
+              <div class="country-code-options" id="countryCodeOptions"></div>
+            </div>
+          </div>
           <div class="auth-provider-row">
             <button class="auth-button provider-button" data-next="onboarding-intro"><span class="icon apple-icon"></span>Continue with Apple</button>
             <button class="auth-button provider-button" data-next="onboarding-intro"><span class="icon google-icon"></span>Continue with Google</button>
@@ -74,7 +78,8 @@
               <p>Meet through people you both know instead of messaging complete strangers.</p>
             </article>
             <article class="onboarding-slide">
-              <div class="onboarding-visual trusted-plans-onboarding-preview">
+              <div class="onboarding-visual trusted-plans-onboarding-preview story-plans">
+                <div class="plan-signal-row"><span>Trusted network</span><i></i><span>Open plan</span></div>
                 <article class="plan-card onboarding-plan-card">
                   <div class="avatar" style="background:linear-gradient(145deg, #ffbfa3,#a79cff)"></div>
                   <div>
@@ -85,6 +90,7 @@
                     <button type="button">Request to Join</button>
                   </div>
                 </article>
+                <div class="plan-join-flow"><span>Request sent</span><span>Host approves</span><span>Plan chat opens</span></div>
               </div>
               <h1>Join Trusted Plans</h1>
               <p>See coffees, dinners, hikes, events and meetups shared across your trusted network. Trusted Plans help people meet with real-world context instead of complete strangers.</p>
@@ -221,8 +227,8 @@
               <label>End Date<input type="date" id="tripEndDate" /></label>
             </div>
             <label>Visibility<select id="tripVisibility"><option>Trusted networks</option><option>Mutuals only</option><option>Private</option></select></label>
-            <label>Trip Purpose<select id="tripPurpose"><option>Personal escape</option><option>Work trip</option><option>Remote work stay</option><option>Visiting friends</option><option>Culture & events</option><option>Open-ended exploring</option><option>Other</option></select></label>
-            <label>What brings you here? <span>(optional)</span><input type="text" id="tripReason" placeholder="Fête de la Musique, wedding, work trip, solo weekend" /></label>
+            <label>Trip Purpose<select id="tripPurpose"><option>Leisure</option><option>Work</option><option>Visiting Friends</option><option>Event</option><option>Other</option></select></label>
+            <label class="conditional-field" id="tripPurposeDetail" hidden><span id="tripPurposeDetailLabel">What brings you here?</span><input type="text" id="tripReason" placeholder="Wedding, festival, birthday trip" /></label>
             <details class="trip-advanced-privacy">
               <summary>Custom visibility</summary>
               <button type="button" class="privacy-extra-row" data-privacy-extra aria-pressed="false">Hide this trip from specific people<span></span></button>
@@ -485,9 +491,9 @@
             <button data-network-filter="met">Met</button>
           </div>
           <section class="content-section"><h2>Trusted Friends</h2><div class="people-stack network-cards"></div></section>
-          <section class="content-section"><h2>People You've Met</h2><p class="section-note">Plan attendees can message and request a trusted upgrade, but their networks stay locked.</p><div class="people-stack met-cards"></div></section>
-          <section class="content-section"><h2>Mutuals</h2><p class="section-note">Friends-of-friends visible through a path. Request intros; do not auto-add.</p><div class="people-stack trusted-cards"></div></section>
-          <section class="content-section"><h2>3rd Degree</h2><p class="section-note">Limited previews only. Unlock through intro, plan, or mutual trust.</p><div class="people-stack third-degree-cards"></div></section>
+          <section class="content-section"><h2>People You've Met</h2><p class="section-note">Verified real-world meetups create Met paths and curated previews, not automatic Trusted Friend access.</p><div class="people-stack met-cards"></div></section>
+          <section class="content-section"><h2>Mutual Connections</h2><p class="section-note">Friends-of-friends visible through a trust path. Request intros before messaging.</p><div class="people-stack trusted-cards"></div></section>
+          <section class="content-section"><h2>Extended Network</h2><p class="section-note">2nd to 6th Degree previews reveal gradually through intros, plans, vouches and verified meetups.</p><div class="people-stack third-degree-cards"></div></section>
         </div>
         <nav class="bottom-nav"></nav>
       </section>
@@ -495,26 +501,16 @@
       <section class="screen app-screen map-screen" id="network-map" data-screen="network-map">
         <div class="city-sky">
           <header class="network-header map-top">
-            <div><h1>City Hub Explorer</h1><p>Tap a hub to reveal trust paths</p></div>
+            <div><h1>Trust Paths</h1><p>Explore how your network branches and reconnects.</p></div>
             <div class="view-toggle compact"><button data-next="network-list">List</button><button class="active">Map</button></div>
           </header>
           <div class="world-lines"></div>
           <div class="connection-line l1"></div><div class="connection-line l2"></div><div class="connection-line l3"></div>
-          <button class="city-node oslo active" data-city="Oslo">Oslo<span>18 active</span></button>
-          <button class="city-node london" data-city="London">London<span>34 active</span></button>
-          <button class="city-node barcelona" data-city="Barcelona">Barcelona<span>21 active</span></button>
-          <button class="city-node tokyo" data-city="Tokyo">Tokyo<span>12 active</span></button>
-          <button class="city-node paris" data-city="Paris">Paris<span>25 active</span></button>
-          <div class="cluster-card">
-            <button class="cluster-close" data-close-cluster aria-label="Close city cluster">Close</button>
-            <button class="cluster-root" data-cluster-person="Laura" data-network-state="unlocked" aria-label="Open Laura's network">Laura</button>
-            <button class="cluster-person p1 locked" data-cluster-person="Emma" data-network-state="locked" aria-label="Preview Emma's locked network">Emma</button><button class="cluster-person p2 locked" data-cluster-person="Noah" data-network-state="locked" aria-label="Preview Noah's locked network">Noah</button><button class="cluster-person p3 locked" data-cluster-person="Mina" data-network-state="locked" aria-label="Preview Mina's locked network">Mina</button><button class="cluster-person p4" data-cluster-person="Theo" data-network-state="unlocked" aria-label="Open Theo's network">Theo</button>
-            <p><strong>Oslo trusted hub</strong><span>Trusted Friends open networks; Met, 2nd Degree and 3rd Degree stay locked.</span></p>
-            <div class="person-network-panel" id="personNetworkPanel" aria-live="polite"></div>
-          </div>
+          <div class="global-network-map" id="globalNetworkMap" aria-label="Global trust map"></div>
+          <section class="network-graph-card" id="networkGraphCard" aria-live="polite"></section>
           <div class="map-bottom glass-card">
-            <div><strong id="mapTrustedSlotCount">4/6</strong><span>Trusted Friends</span></div><div><strong id="mapMetCount">6</strong><span>Met only</span></div><div><strong id="mapTrustedCap">12</strong><span>Max cap</span></div>
-            <button data-next="network-list">Explore trusted paths</button>
+            <div><strong id="mapTrustedSlotCount">4/6</strong><span>Trusted Friends</span></div><div><strong id="mapMetCount">6</strong><span>Met paths</span></div><div><strong id="mapTrustedCap">12</strong><span>Max cap</span></div>
+            <button data-next="network-list">Open list view</button>
           </div>
         </div>
         <nav class="bottom-nav"></nav>
@@ -562,9 +558,9 @@
         <div class="unlock-visual"><span></span><span></span><span></span></div>
         <div class="unlock-content">
           <h1>Meetup Confirmed</h1>
-          <p>Emma is now Met. Her wider network stays locked unless both of you later become Trusted Friends.</p>
+          <p>Emma is now Met. You can see a curated preview; her full branch opens only if you both become Trusted Friends.</p>
           <div class="new-people"><div><span>MB</span></div><div><span>AR</span></div><div><span>NK</span></div><div><span>SR</span></div><div><span>JO</span></div></div>
-          <div class="reach-card"><strong>Meetup Recorded</strong><span>Emma is now Met. Only Trusted Friends unlock wider visibility, so her branch stays closed until you both upgrade.</span></div>
+          <div class="reach-card"><strong>Meetup Recorded</strong><span>Emma is now Met. Met creates a real trust path with curated previews; Trusted Friend unlocks the wider branch.</span></div>
           <div class="gain-grid"><div><strong>Met</strong><span>New status</span></div><div><strong>Locked</strong><span>Wider branch</span></div><div><strong>12</strong><span>Max cap</span></div></div>
         </div>
         <div class="sticky-cta dual"><button class="primary-button" data-next="network-map">Explore New Connections</button><button class="secondary-button" data-next="home">Continue Exploring</button></div>
@@ -591,6 +587,7 @@
           <section class="profile-tab-panel active" data-profile-panel="about">
             <section class="content-section"><h2>About</h2><p class="about-copy">Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.</p><div class="profile-meta-grid"><span>Current city<strong>Tokyo</strong></span><span>Home city<strong>London</strong></span><span>Trust ID<strong>6D-8492-LDN</strong></span></div></section>
             <section class="content-section"><h2>Travel Personality</h2><div class="chip-cloud static"><span>Explorer</span><span>Foodie</span><span>Art & Culture</span><span>Hidden Gems</span></div><h2>Interests</h2><div class="chip-cloud static"><span>Design hotels</span><span>Jazz bars</span><span>Photography</span><span>Slow travel</span></div></section>
+            <section class="content-section"><h2>Photos</h2><div class="profile-photo-grid"><button type="button" aria-label="Profile gallery photo 1"></button><button type="button" aria-label="Profile gallery photo 2"></button><button type="button" aria-label="Profile gallery photo 3"></button><button type="button" aria-label="Profile gallery photo 4"></button></div></section>
           </section>
           <section class="profile-tab-panel" data-profile-panel="trips">
             <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="all-trips">Manage trips</button></div><div class="profile-carousel"><div class="trip-row"><strong>Barcelona</strong><span>Jun 12-16 · visible to trusted networks</span></div><div class="trip-row"><strong>Paris</strong><span>Jul 04-07 · open to meetups</span></div><div class="trip-row"><strong>Lisbon</strong><span>Aug 18-22 · mutuals only</span></div></div></section>
@@ -640,7 +637,7 @@
       <section class="screen app-screen" id="edit-profile" data-screen="edit-profile">
         <div class="scroll-area with-cta">
           <header class="page-header"><p class="eyebrow">My Profile</p><h1>Edit Profile</h1><p>Keep your trusted travel signal clear and current.</p></header>
-          <section class="content-section"><h2>Images</h2><div class="upload-main"><div class="avatar-preview">IO</div><div><strong>Profile photo</strong><span>Update your primary identity image</span></div></div><button class="upload-wide">Change cover image</button></section>
+          <section class="content-section"><h2>Images</h2><div class="media-editor-list"><div class="media-editor-row"><span>Profile photo</span><div><button type="button" data-media-action="replace">Replace</button><button type="button" data-media-action="remove">Remove</button></div></div><div class="media-editor-row"><span>Cover photo</span><div><button type="button" data-media-action="replace">Replace</button><button type="button" data-media-action="remove">Remove</button></div></div><div class="media-editor-row"><span>Gallery images</span><div><button type="button" data-media-action="reorder">Reorder</button><button type="button" data-media-action="replace">Replace</button></div></div></div></section>
           <div class="form-card">
             <label>Name<input placeholder="Ifunanya Okafor" /></label>
             <label>Username<input placeholder="@ifunanya" /></label>
@@ -724,18 +721,18 @@
           <h2 class="guide-section-title">The Network</h2>
           <details class="safety-card guide-card" open><summary><span>Trusted Friend</span><em>Direct trusted circle</em></summary><p>Someone you know personally or have built trust with over time. Trusted Friends unlock network visibility, introduce you to people they know, vouch for you, and join plans with you.</p><div class="definition-bubbles"><span>Limited slots</span><span>Strongest connection</span><span>Unlocks routes</span></div></details>
           <details class="safety-card guide-card"><summary><span>Mutual Connection</span><em>You -> Laura -> Emma</em></summary><p>Someone connected to you through a Trusted Friend. Mutuals can be discovered, introduced to, and met through trusted routes, but they are not yet in your inner circle.</p></details>
-          <details class="safety-card guide-card"><summary><span>Degree</span><em>How close someone is</em></summary><div class="definition-grid"><span><strong>1st</strong>Trusted Friends</span><span><strong>2nd</strong>Friend of a Trusted Friend</span><span><strong>3rd</strong>Extended trusted network</span><span><strong>4th-6th</strong>Further city routes</span></div><p>The further out the degree, the lighter the visibility and the more curated the access.</p></details>
+          <details class="safety-card guide-card"><summary><span>Degree</span><em>How close someone is</em></summary><div class="definition-grid"><span><strong>1st</strong>Trusted Friend</span><span><strong>2nd</strong>Friend of a Trusted Friend</span><span><strong>3rd</strong>Friend of a Mutual Connection</span><span><strong>4th</strong>Multiple trust paths</span><span><strong>5th</strong>Extended Network</span><span><strong>6th</strong>Distant Network Connection</span></div><p>The further out the degree, the lighter the visibility and the more curated the access.</p></details>
           <details class="safety-card guide-card"><summary><span>Met</span><em>Confirmed in real life</em></summary><p>Someone you have met through a plan, intro, QR, or location confirmation. Met confirms real-world context, but it does not automatically unlock their wider network.</p></details>
           <details class="safety-card guide-card"><summary><span>Vouched</span><em>Recommended by trust</em></summary><p>A personal signal from someone in your trusted circle. Vouches can make a person easier to discover or introduce, but they are still separate from becoming a Trusted Friend.</p></details>
           <details class="safety-card guide-card"><summary><span>Archived Path</span><em>History, not access</em></summary><p>A relationship or route you had before, but no longer actively unlocks. Past chats, plans and meetup history remain available, while wider network access closes.</p></details>
           <details class="safety-card guide-card"><summary><span>Locked Network</span><em>No active path</em></summary><p>A person, city hub, plan, or branch that cannot currently be accessed because the trust path is missing or broken. Reconnection or a new trusted route can reopen it.</p></details>
 
           <h2 class="guide-section-title">Trust Progression</h2>
-          <section class="safety-card"><div class="trust-progression"><span>Viewed</span><span>Connected</span><span>Met</span><span>Vouched</span><span>Trusted Friend</span></div><div class="definition-grid"><span><strong>Viewed</strong>Discovered through your network</span><span><strong>Connected</strong>Introduced or chatting</span><span><strong>Met</strong>Confirmed in real life</span><span><strong>Vouched</strong>Recommended by someone trusted</span></div><p>Meeting someone does not automatically make them a Trusted Friend. Trust builds over time.</p></section>
+          <section class="safety-card"><div class="trust-progression"><span>Connected</span><span>Shared Plan</span><span>Met</span><span>Vouched</span><span>Trusted Friend</span></div><div class="definition-grid"><span><strong>Connected</strong>Visible through a trust path</span><span><strong>Shared Plan</strong>Same trusted plan context</span><span><strong>Met</strong>Two-sided real-life confirmation</span><span><strong>Vouched</strong>Recommended by someone trusted</span></div><p>Being in the same plan does not automatically make someone Met or Trusted. Trust builds through real interactions over time.</p></section>
 
           <h2 class="guide-section-title">How Networks Unlock</h2>
           <section class="safety-card guide-route-card"><h2>Meeting unlocks connection. Trust unlocks access.</h2><div class="trust-progression"><span>You</span><span>Laura</span><span>Emma</span><span>Emma's world</span></div><p>Emma may begin as Met. If trust builds and you both confirm the relationship, Emma can become Trusted and open new people, places, and city routes.</p></section>
-          <section class="safety-card guide-route-card"><h2>Meetup Confirmations</h2><p>Confirming a real-world meetup moves a person from Connected to Met. Met gives shared history, but their wider network only opens after both people become Trusted Friends.</p><div class="definition-bubbles"><span>Connected → Met</span><span>Met → Trusted</span><span>Trusted → New branch</span></div></section>
+          <section class="safety-card guide-route-card"><h2>Meetup Confirmations</h2><p>Confirming a real-world meetup moves a person from Connected or Shared Plan to Met. Met gives shared history and curated previews; Trusted Friend opens the wider branch.</p><div class="definition-bubbles"><span>Connected → Met</span><span>Shared Plan → Met</span><span>Trusted → New branch</span></div></section>
 
           <h2 class="guide-section-title">City Hubs</h2>
           <section class="safety-card"><h2>Where your trusted network is active</h2><p>City Hubs unlock through trips, Trusted Friends who live there, verified meetups, hosted plans, mutual connections, and repeated network activity.</p><div class="guide-badges"><span>Barcelona</span><span>Oslo</span><span>London</span><span>Lisbon</span></div></section>
@@ -775,6 +772,6 @@
         <nav class="bottom-nav"></nav>
       </section>
     </main>
-    <script src="./app.js?v=91"></script>
+    <script src="./app.js?v=97"></script>
   </body>
 </html>
