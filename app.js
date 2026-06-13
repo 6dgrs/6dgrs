@@ -90,6 +90,7 @@ const backFallbacks = {
   profile: "home"
 };
 const prototypeStorageKey = "sixdgrsPrototypeState";
+const prototypeStateVersion = 3;
 const dialogSelector = ".discard-dialog";
 
 function query(selector, root = document) {
@@ -323,6 +324,8 @@ const appState = {
   metConnections: [],
   trustedConnections: [],
   vouchedConnections: [],
+  suppressedVouches: [],
+  debugRelationshipTarget: "Emma Laurent",
   signup: {
     countryCode: "+44",
     countryName: "United Kingdom",
@@ -1346,7 +1349,18 @@ const connectionRequests = {
 };
 
 function readPrototypeState() {
-  return readStoredJson(prototypeStorageKey, {});
+  const stored = readStoredJson(prototypeStorageKey, {});
+  if (!stored || !Object.keys(stored).length) return {};
+  if (stored.__version === prototypeStateVersion) return stored;
+  const preservedTourComplete = stored.appState?.productTourCompleted === true || window.localStorage.getItem("productTourCompleted") === "true";
+  window.localStorage.removeItem(prototypeStorageKey);
+  if (preservedTourComplete) {
+    appState.productTourCompleted = true;
+    appState.productTourActive = false;
+    appState.homeTourComplete = true;
+    window.localStorage.setItem("productTourCompleted", "true");
+  }
+  return {};
 }
 
 function mergeObject(target, source) {
@@ -1415,6 +1429,7 @@ function applyStoredPrototypeState() {
 
 function persistPrototypeState() {
   const snapshot = {
+    __version: prototypeStateVersion,
     settingsState,
     appState,
     notificationItems,
@@ -1903,6 +1918,21 @@ function completeProductTour() {
   showScreen("home", { replace: true });
 }
 
+function syncScreenAccessibility(activeId = activeScreenId()) {
+  screens.forEach((screen) => {
+    const isActive = screen.dataset.screen === activeId;
+    screen.classList.toggle("active", isActive);
+    screen.hidden = !isActive;
+    screen.toggleAttribute("inert", !isActive);
+    screen.setAttribute("aria-hidden", String(!isActive));
+    if (isActive) {
+      screen.removeAttribute("tabindex");
+    } else {
+      screen.setAttribute("tabindex", "-1");
+    }
+  });
+}
+
 function showScreen(id, options = {}) {
   const current = activeScreenId();
   captureOnboardingDraft(current);
@@ -1912,7 +1942,7 @@ function showScreen(id, options = {}) {
   }
   if (current === "verify" && id !== "verify") stopVerificationCountdown();
   query("#profileMenu")?.classList.remove("open");
-  screens.forEach((screen) => screen.classList.toggle("active", screen.dataset.screen === id));
+  syncScreenAccessibility(id);
   queryAll(".bottom-nav").forEach(renderNav);
   const active = query(`[data-screen="${id}"] .scroll-area`);
   if (active) active.scrollTop = 0;
@@ -2245,7 +2275,7 @@ function renderSettingsDetail() {
     developer: {
       title: "Developer Mode",
       copy: "Internal testing tools. This will be removed before launch.",
-      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section><section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-chat">Generate Plan Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="trip-overlap">Generate Trip Overlap</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="empty-states">Show Empty States</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset-product-tour">Reset product tour</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
+      body: `<section class="safety-card developer-warning"><h2>Developer Mode</h2><p>Developer Mode is for internal testing and will be removed before launch.</p></section>${relationshipDebugMarkup()}<section class="settings-section detail-actions developer-actions"><button type="button" data-dev-action="intro-request">Generate Intro Request</button><button type="button" data-dev-action="accepted-intro">Generate Accepted Intro</button><button type="button" data-dev-action="declined-intro">Generate Declined Intro</button><button type="button" data-dev-action="intro-chat">Generate Intro Chat</button><button type="button" data-dev-action="direct-chat">Generate Direct Chat</button><button type="button" data-dev-action="plan-chat">Generate Plan Chat</button><button type="button" data-dev-action="plan-join">Generate Plan Join Request</button><button type="button" data-dev-action="plan-approval">Generate Plan Approval Request</button><button type="button" data-dev-action="trip-overlap">Generate Trip Overlap</button><button type="button" data-dev-action="notifications">Generate Notifications</button><button type="button" data-dev-action="trips">Generate Trips</button><button type="button" data-dev-action="empty-states">Show Empty States</button><button type="button" data-dev-action="read-notifications">Mark Notifications Read</button><button type="button" data-dev-action="reset-product-tour">Reset product tour</button><button type="button" data-dev-action="reset-prototype-state">Reset prototype state</button><button type="button" data-dev-action="reset">Reset Demo Data</button></section>`
     }
   };
   const page = pages[detail] || pages.phone;
@@ -2451,6 +2481,64 @@ function ensureBackButtons() {
   });
 }
 
+function relationshipDebugMarkup() {
+  const names = Object.keys(personProfiles);
+  const selected = appState.debugRelationshipTarget || names[0] || "Emma Laurent";
+  const profile = profileForName(selected) || personProfiles["Emma Laurent"];
+  const state = TrustGraphEngine.getRelationshipState(profile.name, { profile }) || {};
+  const trustPath = TrustGraphEngine.getTrustPath(profile.name, { profile }) || {};
+  const actionModel = relationshipActionModel(profile, { state });
+  const actions = [actionModel.primaryAction, ...(actionModel.secondaryActions || [])]
+    .filter(Boolean)
+    .map((action) => action.label)
+    .join(" · ") || "No active CTAs";
+  return `
+    <section class="safety-card developer-warning relationship-debug-panel">
+      <h2>Relationship Debug</h2>
+      <p>Internal tester panel for checking relationship state, vouch signals and CTA permissions.</p>
+      <label class="debug-select">Demo user
+        <select data-debug-relationship-target>
+          ${names.map((name) => `<option value="${name}" ${name === selected ? "selected" : ""}>${name}</option>`).join("")}
+        </select>
+      </label>
+      <div class="profile-meta-grid">
+        <span>State<strong>${state.relationship || state.state || "Unknown"}</strong></span>
+        <span>Level<strong>${state.trustLevel || "Connected"}</strong></span>
+        <span>Vouched<strong>${state.vouched ? "Yes" : "No"}</strong></span>
+        <span>Met<strong>${isMetConnection(profile.name) ? "Yes" : "No"}</strong></span>
+        <span>Trusted<strong>${isTrustedConnection(profile.name) ? "Yes" : "No"}</strong></span>
+        <span>Degree<strong>${state.degreeLabel || "None"}</strong></span>
+      </div>
+      <div class="trust-row"><strong>Active path</strong><span>${trustPath.display || state.path || "No active path"}</span></div>
+      <div class="trust-row"><strong>Available CTAs</strong><span>${actions}</span></div>
+      <div class="debug-action-grid">
+        <button type="button" data-debug-relationship-state="mutual">Set as Mutual</button>
+        <button type="button" data-debug-relationship-state="met">Set as Met</button>
+        <button type="button" data-debug-relationship-state="trusted">Set as Trusted</button>
+        <button type="button" data-debug-relationship-state="locked">Set as Locked</button>
+        <button type="button" data-debug-relationship-state="archived">Set as Archived</button>
+        <button type="button" data-debug-vouch-toggle="${state.vouched ? "remove" : "add"}">${state.vouched ? "Remove Vouch" : "Add Vouch"}</button>
+      </div>
+    </section>
+  `;
+}
+
+function setDebugRelationshipState(name = "", state = "mutual") {
+  if (!name) return;
+  removedConnections.delete(name);
+  removeGraphFlag("trustedConnections", name);
+  removeGraphFlag("metConnections", name);
+  if (state === "met") {
+    addGraphFlag("metConnections", name);
+  }
+  if (state === "trusted") {
+    addGraphFlag("trustedConnections", name);
+  }
+  if (state === "locked" || state === "archived") {
+    removedConnections.add(name);
+  }
+}
+
 function cleanBrandingImages() {
   document.querySelectorAll(".onboarding-brand img, .brand-small img").forEach((image) => image.remove());
 }
@@ -2563,6 +2651,7 @@ function isTrustedConnection(name = "") {
 }
 
 function isVouchedConnection(name = "") {
+  if (hasGraphFlag("suppressedVouches", name)) return hasGraphFlag("vouchedConnections", name);
   return hasGraphFlag("vouchedConnections", name) || Boolean(profileForName(name)?.vouches?.length);
 }
 
@@ -2681,9 +2770,9 @@ function recordUniqueVouch(targetName = "", voucherName = "trusted-circle") {
 
 function relationshipCategoryLabel(state = {}) {
   if (state.trustLevel === "Trusted Friend" || state.degree === 1) return "Trusted Friend";
-  if (state.trustLevel === "Met" || state.trustLevel === "Vouched" || state.relationship === "Met") return "People You've Met";
-  if (state.degree === 2 || state.degree === 3) return "Mutual Connection";
-  if (state.degree >= 4) return "Extended Network";
+  if (state.trustLevel === "Met" || state.relationship === "Met") return "People You've Met";
+  if (state.degree === 2) return "Mutual Connection";
+  if (state.degree >= 3) return "Degree Connection";
   return state.relationship || "Trusted Network";
 }
 
@@ -2691,6 +2780,105 @@ function relationshipDisplayLabel(state = {}) {
   const category = relationshipCategoryLabel(state);
   if (category === "Trusted Friend" || category === "People You've Met") return category;
   return [category, state.degreeLabel].filter(Boolean).join(" · ");
+}
+
+function hasAcceptedDirectChat(name = "") {
+  const normalized = nameKey(name);
+  return Object.values(chats || {}).flat().some((chat) => {
+    const type = (chat.chatType || "").replaceAll("-", "_");
+    return nameKey(chat.name) === normalized && !chat.archived && ["intro_chat", "direct_connection_chat", "trusted_friend_chat"].includes(type);
+  });
+}
+
+function relationshipActionModel(subjectInput = {}, options = {}) {
+  const subject = typeof subjectInput === "object" ? subjectInput : { name: subjectInput };
+  const name = canonicalPersonName(subject.name || selectedProfileName || "");
+  const profile = profileForName(name);
+  const state = options.state || TrustGraphEngine.getRelationshipState(name, profile ? { profile } : { person: subject }) || {};
+  const trustPath = TrustGraphEngine.getTrustPath(name, { person: subject }) || {};
+  const archived = Boolean(state.archived || state.trustLevel === "Archived Path");
+  const locked = !archived && Boolean(state.locked || subject.locked);
+  const trusted = !archived && !locked && (isTrustedConnection(name) || state.trustLevel === "Trusted Friend" || state.relationship === "Trusted Friend" || state.degree === 1);
+  const met = !archived && !locked && !trusted && (isMetConnection(name) || subject.met || state.trustLevel === "Met" || state.relationship === "Met");
+  const acceptedChat = hasAcceptedDirectChat(name);
+  const degree = Number(state.degree || subject.degree || 0);
+  const isCloseMutual = degree === 2 || (!degree && state.relationship?.startsWith("Connected via"));
+  const validIntroPath = !archived && !locked && !trusted && !met && !acceptedChat && isCloseMutual && Boolean(trustPath.active || isActiveTrustPath(state.path, name));
+  const viewProfileAction = { label: met || trusted ? "View Profile" : "View Limited Profile", type: met || trusted ? "view_profile" : "view_limited" };
+  const exploreAction = { label: trusted ? "Explore Branch" : "Explore Partial Branch", type: "explore_branch" };
+
+  if (archived) {
+    return {
+      level: "archived",
+      label: "Archived Path",
+      primaryAction: { label: "Request Reconnection", type: "reconnect" },
+      secondaryActions: [viewProfileAction],
+      canMessage: false,
+      canRequestIntro: false,
+      canExploreBranch: false
+    };
+  }
+  if (locked) {
+    return {
+      level: "locked",
+      label: "Locked Branch",
+      primaryAction: { label: "How To Unlock", type: "unlock" },
+      secondaryActions: validIntroPath ? [{ label: "Request Introduction", type: "request_intro" }] : [],
+      canMessage: false,
+      canRequestIntro: validIntroPath,
+      canExploreBranch: false
+    };
+  }
+  if (trusted) {
+    return {
+      level: "trusted",
+      label: "Trusted Friend",
+      primaryAction: { label: "Message", type: "message" },
+      secondaryActions: [viewProfileAction, exploreAction],
+      canMessage: true,
+      canRequestIntro: false,
+      canExploreBranch: true
+    };
+  }
+  if (met || acceptedChat) {
+    return {
+      level: met ? "met" : "connected",
+      label: met ? "People You've Met" : "Connected",
+      primaryAction: { label: "Message", type: "message" },
+      secondaryActions: [
+        viewProfileAction,
+        ...(met ? [exploreAction, { label: "Request Trusted Connection", type: "trust_upgrade" }] : [])
+      ],
+      canMessage: true,
+      canRequestIntro: false,
+      canExploreBranch: met
+    };
+  }
+  return {
+    level: validIntroPath ? "mutual" : "degree",
+    label: relationshipDisplayLabel(state) || "Mutual Connection",
+    primaryAction: validIntroPath ? { label: "Request Introduction", type: "request_intro" } : viewProfileAction,
+    secondaryActions: [
+      viewProfileAction,
+      ...(validIntroPath ? [{ label: "View Path", type: "view_path" }] : [])
+    ],
+    canMessage: false,
+    canRequestIntro: validIntroPath,
+    canExploreBranch: false
+  };
+}
+
+function relationshipActionButton(action = {}, name = "", options = {}) {
+  const label = action.label || "View Profile";
+  const classAttr = options.className ? ` class="${options.className}"` : "";
+  if (action.type === "message") return `<button type="button"${classAttr} data-message-person="${name}">${label}</button>`;
+  if (action.type === "trust_upgrade") return `<button type="button"${classAttr} data-trust-upgrade="${name}">${label}</button>`;
+  if (action.type === "reconnect") return `<button type="button"${classAttr} data-request-reconnect="${name}">${label}</button>`;
+  if (action.type === "unlock") return `<button type="button"${classAttr} data-locked-network="${name}">${label}</button>`;
+  if (action.type === "request_intro") return `<button type="button"${classAttr} data-next="request-intro" data-profile-name="${name}">${label}</button>`;
+  if (action.type === "explore_branch") return `<button type="button"${classAttr} data-explore-branch="${name}" data-explorer-action="branch">${label}</button>`;
+  if (action.type === "view_path") return `<button type="button"${classAttr} data-network-person="${name}">${label}</button>`;
+  return `<button type="button"${classAttr} data-next="profile" data-profile-name="${name}">${label}</button>`;
 }
 
 const TrustGraphEngine = {
@@ -2748,18 +2936,20 @@ const TrustGraphEngine = {
     let trustLevel = "Connected";
     if (state.archived) trustLevel = "Archived Path";
     else if (isTrustedConnection(subject.name)) trustLevel = "Trusted Friend";
-    else if (isMetConnection(subject.name)) trustLevel = isVouchedConnection(subject.name) ? "Vouched" : "Met";
-    else if (isVouchedConnection(subject.name)) trustLevel = "Vouched";
+    else if (isMetConnection(subject.name)) trustLevel = "Met";
     else if (hasSharedPlan) trustLevel = "Shared Plan";
     const degreeText = degreeLabel(degree);
+    const vouched = isVouchedConnection(subject.name);
     return {
       ...state,
       trustLevel,
+      vouched,
+      trustSignal: vouched ? "Vouched" : "",
       degree,
       degreeLabel: degreeText,
       pathCount: activePaths.length || paths.length,
       pathSummary: activePaths.length > 1 ? `${activePaths.length} trust paths available` : state.path,
-      visibility: trustLevel === "Trusted Friend" ? "Full branch" : trustLevel === "Met" || trustLevel === "Vouched" ? "Curated preview" : trustLevel === "Shared Plan" ? "Plan context" : state.locked ? "Locked" : "Intro only",
+      visibility: trustLevel === "Trusted Friend" ? "Full branch" : trustLevel === "Met" ? "Curated preview" : trustLevel === "Shared Plan" ? "Plan context" : state.locked ? "Locked" : "Intro only",
       snapshot: trustSnapshotFor(profile, { ...state, pathCount: activePaths.length || paths.length, degreeLabel: degreeText })
     };
   },
@@ -2794,7 +2984,8 @@ const TrustGraphEngine = {
         canRemove: true,
         removeLabel: directRelationship === "Trusted Friend" ? "Remove Trusted Friend" : "Remove Met Contact",
         locked: false,
-        action: directRelationship === "Trusted Friend" ? "Message" : "Request Trusted Connection"
+        action: "Message",
+        canTrustUpgrade: directRelationship === "Met"
       };
     }
     if (livePath) {
@@ -2837,7 +3028,8 @@ const TrustGraphEngine = {
         relationship: "Met",
         path: "Met in person · curated network preview",
         locked: false,
-        action: "Request Trusted Connection"
+        action: "Message",
+        canTrustUpgrade: true
       };
     }
     const paths = this.subjectPaths({ person });
@@ -3175,32 +3367,33 @@ function renderProfile() {
   const allPlans = [...(profile.plans.hosting || []), ...(profile.plans.attending || []), ...(profile.plans.past || [])];
   const activePlans = allPlans.filter((plan) => plan.role !== "past").length;
   const pastPlans = allPlans.filter((plan) => plan.role === "past").length;
-  const actionLabel = connectionState.action || (profile.relationship === "Trusted Friend" ? "Message" : profile.relationship === "Met" ? "Request Trusted Connection" : "Request Intro");
+  const actionModel = relationshipActionModel(profile, { state: connectionState });
   const relationshipLabel = relationshipDisplayLabel(connectionState);
-  const actionTarget = actionLabel === "Message" ? "chat-detail" : "request-intro";
-  const isTrustUpgradeAction = actionLabel === "Request Trusted Connection";
-  const chatTypeAttr = actionLabel === "Message"
-    ? ` data-chat-type="${profile.directRelationship === "Trusted Friend" ? "trusted_friend_chat" : "direct_connection_chat"}" data-chat-name="${profile.name}" data-chat-path="${connectionState.path}" data-chat-preview="Message ${profile.name.split(" ")[0]} directly."`
-    : "";
-  const primaryAction = connectionState.archived
-    ? `<button type="button" data-request-reconnect="${profile.name}">Request Reconnection</button>`
-    : isTrustUpgradeAction
-      ? `<button type="button" data-trust-upgrade="${profile.name}">${actionLabel}</button>`
-      : `<button ${connectionState.locked ? "disabled" : `data-next="${actionTarget}" data-profile-name="${profile.name}"${chatTypeAttr}`}>${actionLabel}</button>`;
+  const profileHeaderActions = [
+    actionModel.primaryAction,
+    ...actionModel.secondaryActions.filter((action) => action.type === "trust_upgrade")
+  ].filter((action) => action && !["view_profile", "view_limited", "view_path", "explore_branch"].includes(action.type));
+  const primaryAction = profileHeaderActions.map((action) => relationshipActionButton(action, profile.name)).join("");
+  const canSeeFullProfile = ["trusted", "met"].includes(actionModel.level);
+  const canSeeLimitedProfile = !["archived", "locked"].includes(actionModel.level);
+  const limitedVisibility = !canSeeFullProfile;
+  const visibleInterests = canSeeFullProfile ? profile.interests : profile.interests.slice(0, 4);
+  const visibleTrips = canSeeFullProfile ? upcomingTrips : upcomingTrips.slice(0, 1);
   root.innerHTML = `
     <div class="cover"></div>
     <section class="profile-head">
       <div class="profile-avatar">${profile.initials}</div><div class="verified">Verified</div>
       <h1>${profile.name}</h1><span class="trust-badge relationship-badge" title="${connectionState.degreeLabel || relationshipLabel}">${relationshipLabel}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
-      <div class="profile-actions">${primaryAction}<button type="button" data-share-profile>Share Profile</button></div>
+      <div class="profile-actions">${primaryAction}${canSeeLimitedProfile ? `<button type="button" data-share-profile>Share Profile</button>` : ""}</div>
     </section>
-    <section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${profile.interests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>
-    ${profilePhotoGridMarkup(profile)}
+    ${canSeeLimitedProfile ? `<section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${visibleInterests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>` : ""}
+    ${limitedVisibility ? `<section class="content-section limited-profile-note"><h2>Limited profile</h2><p class="section-note">More media, trips, plans and branch access unlock after an introduction or verified meetup.</p></section>` : ""}
+    ${canSeeFullProfile ? profilePhotoGridMarkup(profile) : ""}
     ${trustSnapshotMarkup(profile, connectionState)}
-    <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips">${upcomingTrips.length ? upcomingTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("") : `<div class="trip-row muted"><strong>No visible trips</strong><span>Nothing visible right now</span></div>`}</div></section>
-    <section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>${activePlans} active · ${pastPlans} past</span></div><button data-next="person-plans">View all Plans →</button></div>${allPlans.slice(0, 2).map(planPreviewRow).join("") || `<div class="trip-row muted"><strong>No visible plans</strong><span>No current plan previews</span></div>`}</section>
-    <section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>${profile.stats}</p><button data-next="network-map">Open Network Explorer</button></div></section>
-    <section class="content-section"><h2>Vouched By</h2><div class="testimonial-row">${profile.vouches.map(([name, quote]) => `<div>${name}<span>${quote}</span></div>`).join("")}</div></section>
+    ${visibleTrips.length ? `<section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2>${canSeeFullProfile ? `<button data-next="person-trips">View all trips →</button>` : ""}</div><div class="profile-carousel discovery-trips">${visibleTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("")}</div></section>` : ""}
+    ${canSeeFullProfile ? `<section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>${activePlans} active · ${pastPlans} past</span></div><button data-next="person-plans">View all Plans →</button></div>${allPlans.slice(0, 2).map(planPreviewRow).join("") || `<div class="trip-row muted"><strong>No visible plans</strong><span>No current plan previews</span></div>`}</section>` : ""}
+    ${canSeeFullProfile ? `<section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>${profile.stats}</p><button data-next="network-map">Open Network Explorer</button></div></section>` : ""}
+    ${profile.vouches?.length ? `<section class="content-section"><h2>Vouched By</h2><div class="testimonial-row">${profile.vouches.slice(0, canSeeFullProfile ? profile.vouches.length : 1).map(([name, quote]) => `<div>${name}<span>${quote}</span></div>`).join("")}</div></section>` : ""}
     <button class="instagram-lock locked" type="button" id="emmaInstagramCard" data-instagram-profile="${profile.instagram}" data-trusted-instagram="false"><strong>Instagram</strong><span id="emmaInstagramStatus">Connect as trusted contacts to view ${profile.name.split(" ")[0]}'s travel photos.</span><small id="emmaInstagramHint">Locked until a trusted connection is established.</small></button>
     ${connectionState.canRemove ? `<div class="profile-utility-actions"><button type="button" data-remove-connection="${profile.name}">Remove from Network</button></div>` : `<p class="archived-path-note">You’re no longer actively connected. Past chats, plans and meetup history remain preserved.</p>`}
   `;
@@ -3250,13 +3443,10 @@ function renderNav(nav) {
 function personCard(person, index = 0) {
   const color = index % 3 === 0 ? "#ffbfa3,#a79cff" : index % 3 === 1 ? "#79dccb,#7c72ff" : "#ffd89b,#6c63ff";
   const pathState = connectionStateForPerson(person);
-  const isArchived = Boolean(pathState?.archived);
-  const isLocked = !isArchived && (pathState?.locked || person.locked || person.degree === 3);
-  const cardCta = pathState?.action || person.cta;
-  const nextScreen = cardCta.includes("Request") || cardCta.includes("Path") ? "request-intro" : "profile";
+  const actionModel = relationshipActionModel(person, { state: pathState });
+  const isArchived = actionModel.level === "archived";
+  const isLocked = actionModel.level === "locked";
   const hasProfile = Boolean(personProfiles[person.name]);
-  const action = isArchived ? "Request Reconnection" : isLocked ? "Locked" : cardCta;
-  const isMessageAction = action === "Message";
   const isHomeDiscovery = ["home", "nearby-people"].includes(activeScreenId());
   const parts = pathParts(person.path || "");
   const mutualName = parts.length > 2 ? parts[1] : "";
@@ -3291,7 +3481,7 @@ function personCard(person, index = 0) {
         <p>${suggestionContext || discoveryContext || `${person.city} · ${context}`}</p>
         ${suggestionWhy}
       </div>
-      <button ${isArchived ? `type="button" data-request-reconnect="${person.name}"` : isLocked ? "disabled" : action === "Request Trusted Connection" ? `type="button" data-trust-upgrade="${person.name}"` : isMessageAction ? `type="button" data-message-person="${person.name}"` : `data-next="${nextScreen}" ${hasProfile ? `data-profile-name="${person.name}"` : ""}`}>${action}</button>
+      ${relationshipActionButton(actionModel.primaryAction, person.name)}
     </article>
   `;
 }
@@ -3369,6 +3559,11 @@ function planShareComposer() {
   `;
 }
 
+function planHostPersonName(plan = {}) {
+  if (!plan.host || plan.host === "You" || plan.host === "Hugo") return "Hugo";
+  return profileForName(plan.host)?.name || plan.host;
+}
+
 function planCard(plan, index = 0, compact = false) {
   const max = Math.min(plan.max, 6);
   const trustState = planTrustState(plan);
@@ -3437,6 +3632,7 @@ function myPlanCard(plan, index = 0) {
   const hostLabel = isHosting ? "Hosted by You" : `Hosted by ${plan.host}`;
   const statusBadge = isHosting ? "Host" : isAttending ? "Accepted" : isPending ? "Pending Approval" : "Past";
   const pendingRequestCount = isHosting ? Number((plan.status || "").match(/\d+/)?.[0] || 0) : 0;
+  const hostPerson = planHostPersonName(plan);
   const context = isHosting
     ? ""
     : isAttending
@@ -3447,9 +3643,9 @@ function myPlanCard(plan, index = 0) {
   const actions = isHosting
     ? `<button data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Manage Plan</button><button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="hosting">Open Plan Chat</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share Plan</button>`
     : isAttending
-      ? `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Plan Chat</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`
+      ? `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Plan Chat</button><button type="button" data-message-person="${hostPerson}">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`
       : isPending
-        ? `<button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="pending">Share Plan</button><button class="muted-plan-action" type="button">Cancel Request</button>`
+        ? `<button type="button" data-message-person="${hostPerson}">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="pending">Share Plan</button><button class="muted-plan-action" type="button">Cancel Request</button>`
         : `<button class="muted-plan-action" data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="past">View Chat History</button>`;
 
   return `
@@ -3625,7 +3821,7 @@ function renderPlanChat() {
     if (!isArchived && isHost) {
       quickActions.innerHTML = `<button class="small-pill" data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Edit Plan</button><button class="small-pill" data-next="plan-requests" data-plan-name="${plan.name}">Review Requests</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share</button>`;
     } else if (!isArchived && isGuest) {
-      quickActions.innerHTML = `<button class="small-pill" data-next="chats">Message Host</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button><button class="small-pill muted-plan-action" type="button">Leave Plan</button>`;
+      quickActions.innerHTML = `<button class="small-pill" type="button" data-message-person="${planHostPersonName(plan)}">Message Host</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button><button class="small-pill muted-plan-action" type="button">Leave Plan</button>`;
     }
   }
 }
@@ -3683,7 +3879,7 @@ function personPlanCard(plan, index = 0) {
   const action = isInformationalPast ? ""
     : isPast ? `<button class="muted-plan-action" data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="past">View Chat History</button>`
       : viewerAccepted ? `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Chat</button>`
-        : viewerPending ? `<button class="muted-plan-action" type="button">Cancel Request</button><button data-next="chats">Message Host</button>`
+        : viewerPending ? `<button class="muted-plan-action" type="button">Cancel Request</button><button type="button" data-message-person="${planHostPersonName(plan)}">Message Host</button>`
           : `<button data-next="plan-detail" data-plan-name="${plan.name}" data-plan-status="discoverable">Request to Join</button>`;
   const badge = isPast ? "Past" : viewerAccepted ? "Accepted" : viewerPending ? "Pending Approval" : "Open to Join";
   const context = isInformationalPast
@@ -3747,11 +3943,11 @@ function renderPlanDetail() {
   if (status === "hosting") {
     actionGrid.innerHTML = `<button data-next="edit-plan" data-plan-name="${plan.name}" data-plan-status="hosting">Edit Plan</button><button data-next="plan-requests" data-plan-name="${plan.name}">View Requests</button><button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="hosting">Message Group</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="hosting">Share Plan</button>`;
   } else if (status === "accepted") {
-    actionGrid.innerHTML = `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Group Chat</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`;
+    actionGrid.innerHTML = `<button data-next="plan-chat" data-plan-name="${plan.name}" data-plan-status="accepted">Open Group Chat</button><button type="button" data-message-person="${planHostPersonName(plan)}">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="accepted">Share Plan</button>`;
   } else if (status === "pending") {
-    actionGrid.innerHTML = `<button disabled>Pending Approval</button><button data-cancel-plan-request>Cancel Request</button><button data-next="chats">Message Host</button>`;
+    actionGrid.innerHTML = `<button disabled>Pending Approval</button><button data-cancel-plan-request>Cancel Request</button><button type="button" data-message-person="${planHostPersonName(plan)}">Message Host</button>`;
   } else {
-    actionGrid.innerHTML = `<button data-request-plan>Request to Join</button><button data-next="chats">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="discoverable">Share Plan</button>`;
+    actionGrid.innerHTML = `<button data-request-plan>Request to Join</button><button type="button" data-message-person="${planHostPersonName(plan)}">Message Host</button><button data-next="chats" data-chat-mode="plan-share" data-plan-name="${plan.name}" data-plan-status="discoverable">Share Plan</button>`;
   }
 }
 
@@ -4481,8 +4677,8 @@ function networkCategoryFor(person = {}, state = {}) {
   if (state.archived || state.locked) return "Locked";
   if (isTrustedConnection(person.name)) return "Trusted Friend";
   if (isMetConnection(person.name) || person.met) return "People You've Met";
-  if ((state.degree || person.degree || 2) <= 3) return "Mutual Connection";
-  return "Extended Network";
+  if ((state.degree || person.degree || 2) === 2) return "Mutual Connection";
+  return "Degree Connection";
 }
 
 function networkNodeClass(person = {}, state = {}) {
@@ -4750,16 +4946,9 @@ function trustFocusPathsForPerson(name = activeNetworkPerson) {
 }
 
 function explorerActionForFocus(focusNode = {}) {
-  const { state } = trustMapSubject(focusNode);
-  if (focusNode.locked || state.locked) return { type: "unlock", label: "How To Unlock" };
-  if (focusNode.self) return { type: "branch", label: "View Full Branch" };
-  if (isTrustedConnection(focusNode.name) || state.relationship === "Trusted Friend" || state.trustLevel === "Trusted Friend") {
-    return { type: "message-profile", labels: ["Message", "View Profile"] };
-  }
-  if (isMetConnection(focusNode.name) || state.relationship === "Met" || state.trustLevel === "Met") {
-    return { type: "message-trust", labels: ["Message", "Request Trusted Connection"] };
-  }
-  return { type: "intro-profile", labels: ["Request Introduction", "View Profile"] };
+  const { person, state } = trustMapSubject(focusNode);
+  if (focusNode.self) return { primaryAction: { label: "View Full Branch", type: "explore_branch" }, secondaryActions: [] };
+  return relationshipActionModel(person, { state });
 }
 
 function renderFocusPathChain(name = activeNetworkPerson) {
@@ -4811,24 +5000,19 @@ function renderDrawerPathRows(name = activeNetworkPerson) {
 }
 
 function renderExplorerActions(focusNode = {}) {
-  const action = explorerActionForFocus(focusNode);
-  if (action.type === "unlock") {
-    return `<button type="button" data-explore-branch="${focusNode.name}" data-explorer-action="unlock">How To Unlock</button>`;
-  }
-  if (action.labels?.length) {
-    const [primary, secondary] = action.labels;
-    const primaryAttr = action.type.includes("message")
-      ? `data-message-person="${focusNode.name}"`
-      : `data-explore-branch="${focusNode.name}" data-explorer-action="intro"`;
-    const secondaryAttr = action.type.includes("trust")
-      ? `data-trust-upgrade="${focusNode.name}"`
-      : `data-view-network-profile="${focusNode.name}"`;
-    return `
-      <button type="button" ${primaryAttr}>${primary}</button>
-      <button type="button" ${secondaryAttr}>${secondary}</button>
-    `;
-  }
-  return `<button type="button" data-explore-branch="${focusNode.name}" data-explorer-action="branch">${action.label}</button>`;
+  const actionModel = explorerActionForFocus(focusNode);
+  const actionSet = [
+    actionModel.primaryAction,
+    ...actionModel.secondaryActions.filter((action) => {
+      if (focusNode.self) return false;
+      if (action.type === "view_path") return true;
+      if (action.type === "explore_branch") return true;
+      if (action.type === "trust_upgrade") return true;
+      if (action.type === "view_profile" || action.type === "view_limited") return true;
+      return false;
+    })
+  ].slice(0, 4);
+  return actionSet.map((action) => relationshipActionButton(action, focusNode.name)).join("");
 }
 
 function trustMapDegreeFor(node = {}, state = {}) {
@@ -5168,6 +5352,13 @@ function bindInteractions() {
   });
 
   document.addEventListener("change", (event) => {
+    const debugTarget = event.target.closest("[data-debug-relationship-target]");
+    if (debugTarget) {
+      appState.debugRelationshipTarget = debugTarget.value;
+      renderSettingsDetail();
+      persistPrototypeState();
+      return;
+    }
     const screen = event.target.closest(".screen");
     if (screen && dirtyScreens.has(screen.dataset.screen)) {
       screen.dataset.dirty = "true";
@@ -6133,6 +6324,34 @@ function bindInteractions() {
       return;
     }
 
+    const debugRelationshipState = event.target.closest("[data-debug-relationship-state]");
+    if (debugRelationshipState) {
+      const target = appState.debugRelationshipTarget || "Emma Laurent";
+      setDebugRelationshipState(target, debugRelationshipState.dataset.debugRelationshipState);
+      refreshTrustGraphViews();
+      renderSettingsDetail();
+      persistPrototypeState();
+      showUtilityFeedback("Relationship state updated", `${target} is now set as ${debugRelationshipState.dataset.debugRelationshipState} for local testing.`);
+      return;
+    }
+
+    const debugVouchToggle = event.target.closest("[data-debug-vouch-toggle]");
+    if (debugVouchToggle) {
+      const target = appState.debugRelationshipTarget || "Emma Laurent";
+      if (debugVouchToggle.dataset.debugVouchToggle === "add") {
+        removeGraphFlag("suppressedVouches", target);
+        addGraphFlag("vouchedConnections", target);
+      } else {
+        removeGraphFlag("vouchedConnections", target);
+        addGraphFlag("suppressedVouches", target);
+      }
+      refreshTrustGraphViews();
+      renderSettingsDetail();
+      persistPrototypeState();
+      showUtilityFeedback("Vouch signal updated", `${target}'s vouch signal was ${debugVouchToggle.dataset.debugVouchToggle === "add" ? "added" : "removed"} locally.`);
+      return;
+    }
+
     const devAction = event.target.closest("[data-dev-action]");
     if (devAction) {
       const action = devAction.dataset.devAction;
@@ -6232,6 +6451,13 @@ function bindInteractions() {
         persistPrototypeState();
         navigateProductTourStep();
         showUtilityFeedback("Product tour reset", "The guided tour is ready to replay from Home.");
+        return;
+      }
+      if (action === "reset-prototype-state") {
+        const tourComplete = window.localStorage.getItem("productTourCompleted");
+        window.localStorage.removeItem(prototypeStorageKey);
+        if (tourComplete !== null) window.localStorage.setItem("productTourCompleted", tourComplete);
+        showUtilityFeedback("Prototype state reset", "Local demo state has been cleared. Refresh to reload the clean beta fixture.");
         return;
       }
       if (action === "reset") {

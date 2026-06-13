@@ -5704,6 +5704,62 @@ textarea {
   grid-template-columns: 1fr;
 }
 
+.relationship-debug-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.debug-select {
+  display: grid;
+  gap: 8px;
+  color: var(--slate);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.debug-select select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(124,114,255,.2);
+  border-radius: 18px;
+  padding: 0 14px;
+  color: var(--charcoal);
+  background: rgba(255,255,255,.88);
+  font: inherit;
+}
+
+.relationship-debug-panel .profile-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.trust-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.74);
+  color: var(--slate);
+}
+
+.trust-row strong {
+  color: var(--charcoal);
+}
+
+.debug-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.debug-action-grid button {
+  min-height: 42px;
+  border-radius: 18px;
+  border: 1px solid rgba(124,114,255,.22);
+  color: var(--violet);
+  background: rgba(255,255,255,.84);
+  font-weight: 900;
+}
+
 .participant-strip {
   display: grid;
   gap: 0;
