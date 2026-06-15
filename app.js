@@ -20,7 +20,7 @@ let selectedPlanName = "Coffee in Shoreditch";
 let requestFilter = "intro";
 let networkFilter = "trusted";
 let activeNetworkCity = "London";
-let activeNetworkPerson = "Laura Chen";
+let activeNetworkPerson = "Lily Chen";
 let activeExplorerMode = "map";
 let previousExplorerPerson = "";
 let networkDrawerState = "collapsed";
@@ -39,8 +39,8 @@ let onboardingSlide = 0;
 let onboardingTimer = null;
 let activeChatDetailMode = "default";
 let selectedChatName = "Emma Laurent";
-let selectedChatPath = "You → Laura → Emma";
-let selectedChatPreview = "Friday works. Laura vouched for you.";
+let selectedChatPath = "You → Lily → Emma";
+let selectedChatPreview = "Friday works. Lily vouched for you.";
 let pendingArchiveChatCard = null;
 let pendingDeleteChatKey = "";
 let pendingDeleteChatName = "";
@@ -366,15 +366,15 @@ const countryDialCodes = [
 ];
 
 const notificationItems = [
-  { id: "intro-noah", kind: "intro", title: "Intro request received", body: "Noah asked Laura to introduce you.", profile: "Noah Silva", active: true },
+  { id: "intro-noah", kind: "intro", title: "Intro request received", body: "Noah asked Lily to introduce you.", profile: "Noah Silva", active: true },
   { id: "plan-sofia", kind: "plan", title: "Plan join request", body: "Sofia requested to join Coffee in Shoreditch.", profile: "Sofia Marin", active: true },
   { id: "accepted-emma", kind: "open-chat", title: "Request accepted", body: "Emma accepted your Barcelona intro.", profile: "Emma Laurent", chatType: "direct_connection_chat", active: true },
   { id: "pending-jazz", kind: "plan-view", title: "Pending plan request", body: "Your jazz night request is waiting for host approval.", active: true },
   { id: "overlap-paris", kind: "home", title: "Trip overlap found", body: "Three trusted mutuals are in Paris next week.", active: true },
   { id: "trusted-emma", kind: "unlock", title: "Trusted Friend confirmed", body: "Emma became a Trusted Friend after mutual verification.", active: true },
   { id: "meetup-theo", kind: "network", title: "Meetup verified", body: "Your QR meetup with Theo was confirmed.", active: true },
-  { id: "vouched-amara", kind: "profile", title: "New vouched connection", body: "Laura vouched for Amara in your London hub.", profile: "Amara Okoye", active: true },
-  { id: "travel-laura-barcelona", kind: "travel-city", title: "Trusted friend arriving", body: "Laura will be in Barcelona next week.", city: "Barcelona", profile: "Laura Chen", active: true },
+  { id: "vouched-amara", kind: "profile", title: "New vouched connection", body: "Lily vouched for Amara in your London hub.", profile: "Amara Okoye", active: true },
+  { id: "travel-laura-barcelona", kind: "travel-city", title: "Trusted friend arriving", body: "Lily will be in Barcelona next week.", city: "Barcelona", profile: "Lily Chen", active: true },
   { id: "travel-tokyo-overlap", kind: "travel-overlap", title: "Tokyo overlap", body: "3 trusted connections will be in Tokyo during your trip.", city: "Tokyo", active: true },
   { id: "travel-emma-lisbon", kind: "travel-shared", title: "Shared destination", body: "Emma will be in Lisbon during your travel dates.", city: "Lisbon", profile: "Emma Laurent", active: true },
   { id: "travel-plan-paris", kind: "travel-plan", title: "Trusted plan overlap", body: "2 people from your network are attending a plan in Paris.", city: "Paris", active: true }
@@ -405,9 +405,9 @@ const myTrips = [
 ];
 
 const homePeople = [
-  { name: "Emma Laurent", city: "Oslo", country: "Norway", path: "You -> Laura -> Emma", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, featured: true, tags: ["art", "gallery", "design", "coffee", "hidden gems"], bio: "Design-led traveler, weekend gallery wanderer, and believer in warm introductions over cold DMs.", plans: ["gallery", "coffee"], trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
+  { name: "Emma Laurent", city: "Oslo", country: "Norway", path: "You -> Lily -> Emma", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, featured: true, tags: ["art", "gallery", "design", "coffee", "hidden gems"], bio: "Design-led traveler, weekend gallery wanderer, and believer in warm introductions over cold DMs.", plans: ["gallery", "coffee"], trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
   { name: "Mina Aoki", city: "Tokyo", country: "Japan", path: "Met at Gallery visit in Mayfair", badge: "Met", status: ["living"], cta: "Request Trusted Connection", met: true, featured: true, livesIn: "Tokyo", tags: ["food", "wellness", "design", "slow travel"], bio: "Quiet food spots, design hotels, and low-key neighbourhood rituals.", plans: ["gallery", "supper"] },
-  { name: "Maya Brooks", city: "London", country: "United Kingdom", path: "You -> Laura -> Maya", badge: "Living here", status: ["living"], cta: "Request Intro", livesIn: "London", tags: ["architecture", "coffee", "local", "culture"], bio: "Architecture walks, espresso counters, and local introductions in London.", plans: ["coffee", "architecture"] },
+  { name: "Maya Brooks", city: "London", country: "United Kingdom", path: "You -> Lily -> Maya", badge: "Living here", status: ["living"], cta: "Request Intro", livesIn: "London", tags: ["architecture", "coffee", "local", "culture"], bio: "Architecture walks, espresso counters, and local introductions in London.", plans: ["coffee", "architecture"] },
   { name: "Ari Patel", city: "London", country: "United Kingdom", path: "You -> Theo -> Ari", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, tags: ["coffee", "nightlife", "low-key", "music"], bio: "Low-key plans, record bars, coffee walks, and warm group hangs.", plans: ["coffee", "jazz"], trips: [{ city: "London", start: "2026-06-02", end: "2026-06-05" }] },
   { name: "Nia Mensah", city: "London", country: "United Kingdom", path: "You -> Amara -> Nia", badge: "Trusted local", status: ["living"], cta: "Explore", livesIn: "London", tags: ["local", "hidden gems", "food", "community"], bio: "Local supper clubs, hidden gems, and thoughtful introductions.", plans: ["supper", "coffee"] },
   { name: "Noah Silva", city: "Barcelona", country: "Spain", path: "You -> Amara -> Noah", badge: "2nd Degree", status: ["same", "visiting"], cta: "Request Intro", degree: 2, tags: ["design", "architecture", "coffee", "remote work"], bio: "Architecture, independent coffee spots, and remote-work friendly city days.", plans: ["coffee", "design"], trips: [{ city: "Barcelona", start: "2026-11-08", end: "2026-11-15" }] },
@@ -418,14 +418,14 @@ const homePeople = [
 
 const networkMovements = [
   { title: "Emma just landed in Lisbon", detail: "Open to local plans this week", tag: "Travel signal" },
-  { title: "Theo unlocked Tokyo", detail: "Through Laura Chen", tag: "City hub" },
+  { title: "Theo unlocked Tokyo", detail: "Through Lily Chen", tag: "City hub" },
   { title: "Maya hosted Sunday Coffee", detail: "Shoreditch · 4 attended", tag: "Trusted Plan" },
   { title: "Sofia was vouched by Emma", detail: "New warm path available", tag: "Trust signal" },
   { title: "2 people are in Barcelona next week", detail: "Same-date overlap in your network", tag: "Trip overlap" }
 ];
 
 const networkPeople = [
-  { name: "Laura Chen", city: "London", path: "Added by QR · knows you IRL · recently added", badge: "Trusted Friend", cta: "Explore", degree: 1, recent: true, livesIn: "London" },
+  { name: "Lily Chen", city: "London", path: "Added by QR · knows you IRL · recently added", badge: "Trusted Friend", cta: "Explore", degree: 1, recent: true, livesIn: "London" },
   { name: "Theo Jensen", city: "Oslo", path: "Verified one-to-one meetup · travelling next week", badge: "Trusted Friend", cta: "Explore", degree: 1, trips: [{ city: "London", start: "2026-06-04", end: "2026-06-08" }] },
   { name: "Sofia Marin", city: "Barcelona", path: "Invite link accepted · same dates as you", badge: "Trusted Friend", cta: "Explore", degree: 1, trips: [{ city: "Barcelona", start: "2026-11-09", end: "2026-11-14" }] },
   { name: "Amara Okoye", city: "London", path: "Imported contact · vouched · in London now", badge: "Trusted Friend", cta: "Explore", degree: 1, livesIn: "London" }
@@ -438,35 +438,35 @@ const metPeople = [
 ];
 
 const secondDegreePeople = [
-  { name: "Emma Laurent", city: "Oslo", path: "You -> Laura -> Emma · same dates as you", badge: "2nd Degree", cta: "Request Intro", degree: 2, trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
+  { name: "Emma Laurent", city: "Oslo", path: "You -> Lily -> Emma · same dates as you", badge: "2nd Degree", cta: "Request Intro", degree: 2, trips: [{ city: "Barcelona", start: "2026-11-10", end: "2026-11-14" }] },
   { name: "Noah Silva", city: "Barcelona", path: "You -> Amara -> Noah · in Barcelona until 15 Nov", badge: "2nd Degree", cta: "View Mutual Path", degree: 2, trips: [{ city: "Barcelona", start: "2026-11-08", end: "2026-11-15" }] },
   { name: "Maya Brooks", city: "London", path: "You -> Theo -> Maya · local in London", badge: "2nd Degree", cta: "Request Intro", degree: 2, livesIn: "London" }
 ];
 
 const thirdDegreePeople = [
-  { name: "Nina", city: "Paris", path: "You -> Laura -> Emma -> Nina", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
+  { name: "Nina", city: "Paris", path: "You -> Lily -> Emma -> Nina", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
   { name: "Ren", city: "Tokyo", path: "You -> Theo -> Mina -> Ren", badge: "3rd Degree", cta: "Locked", degree: 3, locked: true },
-  { name: "Kenji Mori", city: "Tokyo", path: "You -> Laura -> Emma -> Theo -> Jonas -> Kenji", badge: "5th Degree", cta: "Locked", degree: 5, locked: true }
+  { name: "Kenji Mori", city: "Tokyo", path: "You -> Lily -> Emma -> Theo -> Jonas -> Kenji", badge: "5th Degree", cta: "Locked", degree: 5, locked: true }
 ];
 
 const chats = {
   all: [
-    { name: "Intro Request", path: "Hugo → Emma via Laura", preview: "Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
-    { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "1m", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" },
-    { name: "Emma Laurent", path: "You -> Laura -> Emma", preview: "Friday works. Laura vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Intro Request", path: "Hugo → Emma via Lily", preview: "Hey Lily - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
+    { name: "Hugo & Emma", path: "Introduced by Lily", preview: "Lily introduced you both.", time: "1m", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" },
+    { name: "Emma Laurent", path: "You -> Lily -> Emma", preview: "Friday works. Lily vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
     { name: "Jonas Berg", path: "Hugo → Theo → Jonas", preview: "Theo introduced you both after the Oslo hub.", time: "6m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
     { name: "Mary Chen", path: "Hugo → Maya → Mary", preview: "Maya said you both like quiet dinner plans.", time: "11m", type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
-    { name: "Laura Chen", path: "Trusted Friend", preview: "I can introduce you both if comfortable.", time: "14m", unread: true, trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Lily Chen", path: "Trusted Friend", preview: "I can introduce you both if comfortable.", time: "14m", unread: true, trusted: true, chatType: "trusted_friend_chat" },
     { name: "Theo Jensen", path: "Oslo hub", preview: "Three trusted people are in Paris next week.", time: "1h", trusted: true, chatType: "trusted_friend_chat" },
     { name: "Coffee in Shoreditch", path: "Plan · private group", preview: "Amara shared the table details.", time: "Sat", trusted: true, screen: "plan-chat", chatType: "plan_chat" }
   ],
   unread: [
-    { name: "Intro Request", path: "Hugo → Emma via Laura", preview: "Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
-    { name: "Emma Laurent", path: "You -> Laura -> Emma", preview: "Friday works. Laura vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
-    { name: "Amara Okoye", path: "You -> Laura -> Amara", preview: "I have two London friends you should meet.", time: "9m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true }
+    { name: "Intro Request", path: "Hugo → Emma via Lily", preview: "Hey Lily - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.", time: "Now", unread: true, type: "Intro Request", chatType: "intro_request", introRequest: true },
+    { name: "Emma Laurent", path: "You -> Lily -> Emma", preview: "Friday works. Lily vouched for you.", time: "2m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true },
+    { name: "Amara Okoye", path: "You -> Lily -> Amara", preview: "I have two London friends you should meet.", time: "9m", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true }
   ],
   trusted: [
-    { name: "Laura Chen", path: "Trusted Friend", preview: "Added through QR in London.", time: "14m", trusted: true, chatType: "trusted_friend_chat" },
+    { name: "Lily Chen", path: "Trusted Friend", preview: "Added through QR in London.", time: "14m", trusted: true, chatType: "trusted_friend_chat" },
     { name: "Theo Jensen", path: "Trusted Friend", preview: "Met and verified in Oslo.", time: "1h", trusted: true, chatType: "trusted_friend_chat" },
     { name: "Sofia Marin", path: "Trusted Friend", preview: "Trusted connection from Barcelona.", time: "Yesterday", trusted: true, chatType: "trusted_friend_chat" }
   ],
@@ -478,7 +478,7 @@ const chats = {
 };
 
 const shareContacts = [
-  { name: "Laura Chen", path: "Trusted Friend", preview: "Share Emma's profile with Laura.", time: "Trusted" },
+  { name: "Lily Chen", path: "Trusted Friend", preview: "Share Emma's profile with Lily.", time: "Trusted" },
   { name: "Theo Jensen", path: "Met in Oslo", preview: "Share Emma's profile with Theo.", time: "Trusted" },
   { name: "Amara Okoye", path: "Verified meetup", preview: "Share Emma's profile with Amara.", time: "Trusted" }
 ];
@@ -487,7 +487,7 @@ const cityMutuals = {
   Barcelona: [
     { name: "Noah Silva", city: "Barcelona", path: "You -> Amara -> Noah", badge: "2nd Degree", cta: "Request Intro" },
     { name: "Ines Costa", city: "Barcelona", path: "You -> Emma -> Ines", badge: "Foodie mutual", cta: "Request Intro" },
-    { name: "Mateo Ruiz", city: "Barcelona", path: "You -> Laura -> Mateo", badge: "Living here", cta: "Explore" }
+    { name: "Mateo Ruiz", city: "Barcelona", path: "You -> Lily -> Mateo", badge: "Living here", cta: "Explore" }
   ],
   Tokyo: [
     { name: "Mina Aoki", city: "Tokyo", path: "Met at Gallery visit in Mayfair", badge: "Met", cta: "Request Trusted Connection" },
@@ -1033,9 +1033,9 @@ function startVerificationCountdown(durationSeconds = 600) {
 }
 
 const discoverablePlans = [
-  { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Laura -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", city: "London", joined: 3, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
-  { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", city: "London", joined: 3, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" },
-  { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Laura -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", city: "London", joined: 2, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Lily -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", city: "London", joined: 3, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Lily -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", city: "London", joined: 3, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" },
+  { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Lily -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", city: "London", joined: 2, max: 6, visibility: "Mutual connections", status: "Open to request", viewerStatus: "discoverable" },
   { name: "Dinner in Soho", host: "Noah", path: "You -> Emma -> Noah", time: "Thu, 8:00 PM", location: "Soho", city: "London", joined: 4, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" }
 ];
 
@@ -1046,11 +1046,11 @@ const myPlans = {
     { name: "Dinner in Soho", host: "You", path: "Direct Trusted Friends only", time: "Thu, 8:00 PM", location: "Soho", joined: 4, max: 6, visibility: "Trusted Friends", status: "Confirmed", role: "hosting", mine: true }
   ],
   attending: [
-    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Accepted", role: "attending" },
-    { name: "Sunday walk in Hampstead", host: "Laura", path: "Trusted Friend", time: "Sun, 9:30 AM", location: "Hampstead", joined: 2, max: 6, visibility: "Mutual connections", status: "Group chat open", role: "attending" }
+    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Lily -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Accepted", role: "attending" },
+    { name: "Sunday walk in Hampstead", host: "Lily", path: "Trusted Friend", time: "Sun, 9:30 AM", location: "Hampstead", joined: 2, max: 6, visibility: "Mutual connections", status: "Group chat open", role: "attending" }
   ],
   pending: [
-    { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Laura -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", joined: 3, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" }
+    { name: "Jazz night in Dalston", host: "Sofia", path: "You -> Lily -> Sofia", time: "Fri, 9:00 PM", location: "Dalston", joined: 3, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" }
   ],
   past: [
     { name: "Design stores in Marylebone", host: "Maya", path: "You -> Amara -> Maya", time: "Sat, 4:00 PM", location: "Marylebone", joined: 4, max: 6, visibility: "2nd Degree", status: "Met created", role: "past" },
@@ -1072,10 +1072,10 @@ const emmaTrips = [
 
 const emmaPlans = {
   hosting: [
-    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Laura -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Request to join", viewerStatus: "discoverable" }
+    { name: "Gallery visit in Mayfair", host: "Emma", path: "You -> Lily -> Emma", time: "Sun, 11:30 AM", location: "Mayfair", joined: 3, max: 6, visibility: "2nd Degree", status: "Request to join", viewerStatus: "discoverable" }
   ],
   attending: [
-    { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Laura -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", joined: 3, max: 6, visibility: "Mutual connections", status: "Accepted", viewerStatus: "accepted", role: "attending" }
+    { name: "Coffee in Shoreditch", host: "Amara", path: "You -> Lily -> Amara", time: "Sat, 2:00 PM", location: "Shoreditch", joined: 3, max: 6, visibility: "Mutual connections", status: "Accepted", viewerStatus: "accepted", role: "attending" }
   ],
   past: [
     { name: "Design stores in Marylebone", host: "Maya", path: "You -> Emma -> Maya", time: "Sat, 4:00 PM", location: "Marylebone", joined: 4, max: 6, visibility: "2nd Degree", status: "Past", role: "past" }
@@ -1088,14 +1088,14 @@ const personProfiles = {
     initials: "EL",
     city: "Oslo",
     homeCity: "Oslo",
-    relationship: "Mutual via Laura",
-    path: "You -> Laura -> Emma",
-    paths: ["You -> Laura -> Emma", "You -> Maya -> Emma"],
+    relationship: "Mutual via Lily",
+    path: "You -> Lily -> Emma",
+    paths: ["You -> Lily -> Emma", "You -> Maya -> Emma"],
     action: "Request Intro",
     bio: "Design-led traveller, weekend gallery wanderer, and believer in warm introductions over cold DMs.",
     interests: ["Hidden Gems", "Art & Culture", "Coffee Spots", "Luxury Travel"],
     stats: "14 countries visited · 9 trusted hubs",
-    vouches: [["Laura", "\"Thoughtful, kind, easy to meet.\""], ["Amara", "\"Always knows the place.\""]],
+    vouches: [["Lily", "\"Thoughtful, kind, easy to meet.\""], ["Amara", "\"Always knows the place.\""]],
     instagram: "emma.laurent",
     trips: emmaTrips,
     plans: emmaPlans
@@ -1144,13 +1144,13 @@ const personProfiles = {
     city: "London",
     homeCity: "London",
     relationship: "Lives Here",
-    path: "You -> Laura -> Maya",
-    paths: ["You -> Laura -> Maya"],
+    path: "You -> Lily -> Maya",
+    paths: ["You -> Lily -> Maya"],
     action: "Request Intro",
     bio: "London local who hosts quiet design walks and trusted, small-group plans.",
     interests: ["Design hotels", "Hidden Gems", "Art & Culture"],
     stats: "11 countries visited · 7 trusted hubs",
-    vouches: [["Amara", "\"A calm, thoughtful host.\""], ["Laura", "\"Great instincts for people.\""]],
+    vouches: [["Amara", "\"A calm, thoughtful host.\""], ["Lily", "\"Great instincts for people.\""]],
     instagram: "maya.brooks",
     trips: [],
     plans: {
@@ -1171,7 +1171,7 @@ const personProfiles = {
     bio: "Trusted friend and warm London host for small, thoughtful plans.",
     interests: ["Supper clubs", "Coffee Spots", "Local Host"],
     stats: "16 countries visited · 10 trusted hubs",
-    vouches: [["Laura", "\"Always makes people feel welcome.\""], ["Theo", "\"Deeply reliable.\""]],
+    vouches: [["Lily", "\"Always makes people feel welcome.\""], ["Theo", "\"Deeply reliable.\""]],
     instagram: "amara.okoye",
     trips: [],
     plans: {
@@ -1180,8 +1180,8 @@ const personProfiles = {
       past: []
     }
   },
-  "Laura Chen": {
-    name: "Laura Chen",
+  "Lily Chen": {
+    name: "Lily Chen",
     initials: "LC",
     city: "London",
     homeCity: "London",
@@ -1193,7 +1193,7 @@ const personProfiles = {
     interests: ["Coffee Spots", "Galleries", "Hidden Gems"],
     stats: "12 countries visited · 8 trusted hubs",
     vouches: [["Amara", "\"A natural bridge between good people.\""]],
-    instagram: "laura.chen",
+    instagram: "lily.chen",
     trips: [],
     plans: { hosting: [], attending: [], past: [] }
   },
@@ -1209,7 +1209,7 @@ const personProfiles = {
     bio: "Trusted friend with a careful eye for safe, high-quality city plans.",
     interests: ["Local Host", "Jazz bars", "Design hotels"],
     stats: "10 countries visited · 6 trusted hubs",
-    vouches: [["Laura", "\"Reliable, calm and generous.\""]],
+    vouches: [["Lily", "\"Reliable, calm and generous.\""]],
     instagram: "theo.jensen",
     trips: [],
     plans: { hosting: [], attending: [], past: [] }
@@ -1219,14 +1219,14 @@ const personProfiles = {
     initials: "SM",
     city: "Barcelona",
     homeCity: "Barcelona",
-    relationship: "Mutual via Laura",
-    path: "You -> Laura -> Sofia",
-    paths: ["You -> Laura -> Sofia"],
+    relationship: "Mutual via Lily",
+    path: "You -> Lily -> Sofia",
+    paths: ["You -> Lily -> Sofia"],
     action: "Request Intro",
     bio: "Barcelona-based trusted mutual who prefers small, thoughtful plans and calm local introductions.",
     interests: ["Local Host", "Coffee Spots", "Hidden Gems"],
     stats: "8 countries visited · 4 trusted hubs",
-    vouches: [["Laura", "\"Thoughtful and easy to host.\""]],
+    vouches: [["Lily", "\"Thoughtful and easy to host.\""]],
     instagram: "sofia.marin",
     trips: [],
     plans: { hosting: [], attending: [], past: [] }
@@ -1319,23 +1319,23 @@ const personProfiles = {
 };
 
 const planJoinRequests = [
-  { name: "Sofia Marin", path: "You -> Laura -> Sofia", vouch: "Vouched by Laura", message: "I know Amara through the Oslo hub and would love to join for coffee." },
+  { name: "Sofia Marin", path: "You -> Lily -> Sofia", vouch: "Vouched by Lily", message: "I know Amara through the Oslo hub and would love to join for coffee." },
   { name: "Ari Patel", path: "You -> Theo -> Ari", vouch: "Verified meetup", message: "I will be nearby after a gallery visit and can keep it low-key." },
-  { name: "Maya Brooks", path: "You -> Amara -> Maya", vouch: "2 mutuals", message: "Laura mentioned this plan and said it may be a good fit." }
+  { name: "Maya Brooks", path: "You -> Amara -> Maya", vouch: "2 mutuals", message: "Lily mentioned this plan and said it may be a good fit." }
 ];
 
 const connectionRequests = {
   intro: [
-    { name: "Noah Silva", path: "You -> Laura -> Noah", type: "Intro request received", status: "Waiting for you", actions: true },
+    { name: "Noah Silva", path: "You -> Lily -> Noah", type: "Intro request received", status: "Waiting for you", actions: true },
     { name: "Ines Costa", path: "You -> Emma -> Ines", type: "Intro request received", status: "New" }
   ],
   sent: [
-    { name: "Emma Laurent", path: "You -> Laura -> Emma", type: "Via mutual friend", status: "Sent to Laura" },
+    { name: "Emma Laurent", path: "You -> Lily -> Emma", type: "Via mutual friend", status: "Sent to Lily" },
     { name: "Maya Brooks", path: "You -> Amara -> Maya", type: "Direct request", status: "Waiting" }
   ],
   accepted: [
     { name: "Theo Jensen", path: "You -> Theo", type: "Accepted request", status: "Chat open" },
-    { name: "Sofia Marin", path: "You -> Laura -> Sofia", type: "Accepted plan request", status: "Added to chat" }
+    { name: "Sofia Marin", path: "You -> Lily -> Sofia", type: "Accepted plan request", status: "Added to chat" }
   ],
   met: [
     { name: "Mina Aoki", path: "Met at Gallery visit in Mayfair", type: "Trusted Friend request", status: "Needs mutual accept" },
@@ -1343,15 +1343,19 @@ const connectionRequests = {
     { name: "Nia Mensah", path: "Met at Jazz night in Dalston", type: "Message open", status: "Network locked" }
   ],
   meetups: [
-    { name: "Emma Laurent", path: "You -> Laura -> Emma", type: "Pending meetup", status: "Verify after coffee" },
-    { name: "Amara Okoye", path: "You -> Laura -> Amara", type: "Pending plan meetup", status: "QR available" }
+    { name: "Emma Laurent", path: "You -> Lily -> Emma", type: "Pending meetup", status: "Verify after coffee" },
+    { name: "Amara Okoye", path: "You -> Lily -> Amara", type: "Pending plan meetup", status: "QR available" }
   ]
 };
 
 function readPrototypeState() {
   const stored = readStoredJson(prototypeStorageKey, {});
   if (!stored || !Object.keys(stored).length) return {};
-  if (stored.__version === prototypeStateVersion) return stored;
+  if (stored.__version === prototypeStateVersion) {
+    const migrated = migrateLilyName(stored);
+    if (migrated.changed) writeStoredJson(prototypeStorageKey, migrated.value);
+    return migrated.value;
+  }
   const preservedTourComplete = stored.appState?.productTourCompleted === true || window.localStorage.getItem("productTourCompleted") === "true";
   window.localStorage.removeItem(prototypeStorageKey);
   if (preservedTourComplete) {
@@ -1361,6 +1365,25 @@ function readPrototypeState() {
     window.localStorage.setItem("productTourCompleted", "true");
   }
   return {};
+}
+
+function migrateLilyName(value) {
+  let changed = false;
+  const previousFirstName = ["Lau", "ra"].join("");
+  const previousFirstNamePattern = new RegExp(previousFirstName, "g");
+  const walk = (entry) => {
+    if (typeof entry === "string") {
+      const next = entry.replace(previousFirstNamePattern, "Lily").replace(/laura\.chen/g, "lily.chen");
+      if (next !== entry) changed = true;
+      return next;
+    }
+    if (Array.isArray(entry)) return entry.map(walk);
+    if (entry && typeof entry === "object") {
+      return Object.fromEntries(Object.entries(entry).map(([key, item]) => [key, walk(item)]));
+    }
+    return entry;
+  };
+  return { value: walk(value), changed };
 }
 
 function mergeObject(target, source) {
@@ -1602,14 +1625,14 @@ function addNotificationEvent(kind) {
       id: `dev-intro-${now}`,
       kind: "intro",
       title: "Intro request received",
-      body: "Noah asked Laura to introduce you.",
+      body: "Noah asked Lily to introduce you.",
       profile: "Noah Silva"
     },
     acceptedIntro: {
       id: `dev-accepted-intro-${now}`,
       kind: "open-chat",
       title: "Intro accepted",
-      body: "Laura introduced Hugo and Emma.",
+      body: "Lily introduced Hugo and Emma.",
       profile: "Emma Laurent",
       chatType: "intro_chat"
     },
@@ -1617,14 +1640,14 @@ function addNotificationEvent(kind) {
       id: `dev-declined-intro-${now}`,
       kind: "profile",
       title: "Intro request closed",
-      body: "Laura replied not right now.",
-      profile: "Laura Chen"
+      body: "Lily replied not right now.",
+      profile: "Lily Chen"
     },
     introChat: {
       id: `dev-intro-chat-${now}`,
       kind: "open-chat",
       title: "Intro chat created",
-      body: "Hugo and Emma can now chat through Laura's introduction.",
+      body: "Hugo and Emma can now chat through Lily's introduction.",
       profile: "Emma Laurent",
       chatType: "intro_chat"
     },
@@ -1673,9 +1696,9 @@ function addNotificationEvent(kind) {
       id: `dev-travel-friend-${now}`,
       kind: "travel-city",
       title: "Trusted friend arriving",
-      body: "Laura will be in Barcelona next week.",
+      body: "Lily will be in Barcelona next week.",
       city: "Barcelona",
-      profile: "Laura Chen"
+      profile: "Lily Chen"
     },
     mutualOverlap: {
       id: `dev-travel-mutual-${now}`,
@@ -2106,7 +2129,7 @@ function returnToShareOrigin() {
 }
 
 function showShareCompleteDialog(type, recipient) {
-  pendingSharedRecipient = recipient || "Laura Chen";
+  pendingSharedRecipient = recipient || "Lily Chen";
   const isPlanShare = type === "plan";
   openDialog(`
     <div class="discard-card" role="dialog" aria-modal="true" aria-label="${isPlanShare ? "Plan shared" : "Profile shared"}">
@@ -2205,7 +2228,7 @@ function renderNotifications() {
       };
       actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
     }
-    return `<article class="notification-card" data-notification-card="${item.id}"><button class="notification-swipe-clear" type="button" data-clear-notification="${item.id}" aria-label="Clear notification">Clear</button><div class="notification-swipe-content"><span>${item.title}</span><strong>${item.body}</strong>${actions}</div></article>`;
+    return `<article class="notification-card" data-notification-card="${item.id}"><button class="notification-swipe-clear" type="button" data-clear-notification="${item.id}" aria-label="Clear notification">×</button><div class="notification-swipe-content"><span>${item.title}</span><strong>${item.body}</strong>${actions}</div></article>`;
   }).join("") : emptyState("No notifications yet", "Intro requests, plan updates and trip overlaps will appear here.", `<button type="button" class="soft-action" data-settings-detail="developer">Generate test activity</button>`);
   updateNotificationBadges();
 }
@@ -2805,7 +2828,6 @@ function relationshipActionModel(subjectInput = {}, options = {}) {
   const isCloseMutual = degree === 2 || (!degree && state.relationship?.startsWith("Connected via"));
   const validIntroPath = !archived && !locked && !trusted && !met && !acceptedChat && isCloseMutual && Boolean(trustPath.active || isActiveTrustPath(state.path, name));
   const viewProfileAction = { label: met || trusted ? "View Profile" : "View Limited Profile", type: met || trusted ? "view_profile" : "view_limited" };
-  const exploreAction = { label: trusted ? "Explore Branch" : "Explore Partial Branch", type: "explore_branch" };
 
   if (archived) {
     return {
@@ -2834,10 +2856,10 @@ function relationshipActionModel(subjectInput = {}, options = {}) {
       level: "trusted",
       label: "Trusted Friend",
       primaryAction: { label: "Message", type: "message" },
-      secondaryActions: [viewProfileAction, exploreAction],
+      secondaryActions: [viewProfileAction],
       canMessage: true,
       canRequestIntro: false,
-      canExploreBranch: true
+      canExploreBranch: false
     };
   }
   if (met || acceptedChat) {
@@ -2847,11 +2869,11 @@ function relationshipActionModel(subjectInput = {}, options = {}) {
       primaryAction: { label: "Message", type: "message" },
       secondaryActions: [
         viewProfileAction,
-        ...(met ? [exploreAction, { label: "Request Trusted Connection", type: "trust_upgrade" }] : [])
+        ...(met ? [{ label: "Request Trusted Connection", type: "trust_upgrade" }] : [])
       ],
       canMessage: true,
       canRequestIntro: false,
-      canExploreBranch: met
+      canExploreBranch: false
     };
   }
   return {
@@ -3198,7 +3220,7 @@ const TrustGraphEngine = {
     return {
       ...trustPath,
       target: profile.name,
-      via: parts.length >= 3 ? parts[1] : trustPath.via || "Laura",
+      via: parts.length >= 3 ? parts[1] : trustPath.via || "Lily",
       active: Boolean(trustPath.active)
     };
   }
@@ -3551,7 +3573,7 @@ function planShareComposer() {
         </div>
       </article>
       <div class="share-send-box">
-        <label>Send to<select><option>Laura Chen</option><option>Theo Jensen</option><option>Amara Okoye</option></select></label>
+        <label>Send to<select><option>Lily Chen</option><option>Theo Jensen</option><option>Amara Okoye</option></select></label>
         <label>Message<textarea placeholder="Thought you might like this trusted plan."></textarea></label>
         <div class="share-send-actions"><button class="secondary-button" type="button" data-share-cancel>Cancel</button><button class="primary-button" type="button" data-share-plan-send>Send Plan</button></div>
       </div>
@@ -3763,12 +3785,12 @@ function renderPlanChat() {
   }
   const hostLabel = plan.host === "You" ? "Hugo" : plan.host;
   const hostFirst = hostLabel;
-  const participants = [hostFirst, "Laura", "Theo", plan.host === "You" ? "Amara" : "Hugo"];
+  const participants = [hostFirst, "Lily", "Theo", plan.host === "You" ? "Amara" : "Hugo"];
   const uniqueParticipants = [...new Set(participants)];
   const profileNames = {
     Amara: "Amara Okoye",
     Hugo: "Hugo",
-    Laura: "Laura Chen",
+    Lily: "Lily Chen",
     Theo: "Theo Jensen",
     Emma: "Emma Laurent",
     Noah: "Noah Silva",
@@ -4365,8 +4387,8 @@ function renderChatDetail() {
   const screen = document.querySelector("#chat-detail .chat-detail");
   if (!screen) return;
   const chatName = selectedChatName || "Emma Laurent";
-  const chatPath = selectedChatPath || "You → Laura → Emma";
-  const chatPreview = selectedChatPreview || "Friday works. Laura vouched for you.";
+  const chatPath = selectedChatPath || "You → Lily → Emma";
+  const chatPreview = selectedChatPreview || "Friday works. Lily vouched for you.";
   const chatProfileName = personProfiles[chatName] ? chatName : "Emma Laurent";
 
   if (activeChatDetailMode === "archived_chat") {
@@ -4383,10 +4405,10 @@ function renderChatDetail() {
 
   if (activeChatDetailMode === "intro-request" || activeChatDetailMode === "intro_request") {
     screen.innerHTML = `
-      ${chatHeaderMarkup("Intro Request", "Hugo → Emma via Laura")}
+      ${chatHeaderMarkup("Intro Request", "Hugo → Emma via Lily")}
       ${compactChatActionsMarkup("Emma Laurent", { includeTrips: false, includePlans: false, className: "intro-request-compact-actions" })}
       <div class="messages">
-        <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.</p>
+        <p class="bubble theirs">Hey Lily - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time.</p>
         <div class="intro-request-actions chat-detail-intro-actions">
           <button class="primary-mini" type="button" data-introduce>Introduce</button>
           <button class="secondary-mini" type="button" data-intro-reply>Reply</button>
@@ -4403,7 +4425,7 @@ function renderChatDetail() {
       ${chatHeaderMarkup("Hugo", "Intro request clarification")}
       ${compactChatActionsMarkup("Emma Laurent", { includeTrips: false, includePlans: false, className: "intro-request-compact-actions" })}
       <div class="messages">
-        <p class="bubble theirs">Hey Laura - would love an intro to Emma if it feels right.</p>
+        <p class="bubble theirs">Hey Lily - would love an intro to Emma if it feels right.</p>
         <p class="bubble mine">Happy to intro - what are you hoping to connect on?</p>
       </div>
       ${chatComposerMarkup("Message Hugo")}
@@ -4417,11 +4439,11 @@ function renderChatDetail() {
       ? `<div class="intro-chat-footer-actions"><button type="button">Mute Chat</button><button type="button" data-leave-intro-chat>Leave Chat</button></div>`
       : "";
     screen.innerHTML = `
-      ${chatHeaderMarkup("Hugo & Emma", "Introduced by Laura", "intro-chat-top")}
+      ${chatHeaderMarkup("Hugo & Emma", "Introduced by Lily", "intro-chat-top")}
       ${compactChatActionsMarkup("Emma Laurent")}
       <div class="messages">
         <p class="bubble theirs">Thought you two should meet - you're both in Barcelona next week and seem like a great fit. You both love galleries, coffee spots and slow travel.</p>
-        <p class="bubble mine">Thank you Laura. Emma, lovely to meet you here.</p>
+        <p class="bubble mine">Thank you Lily. Emma, lovely to meet you here.</p>
         <p class="bubble theirs">Likewise. I have a gallery afternoon saved for Saturday if you are around.</p>
       </div>
       ${isIntroducerView ? "" : `<button class="meetup-button" data-next="verify">Confirm Meetup</button>`}
@@ -4759,7 +4781,7 @@ function renderCrossCityRoutes(focus) {
 
 const trustPathMapLayout = [
   { name: "You", city: "London", x: 34, y: 47, self: true },
-  { name: "Laura Chen", city: "London", x: 39, y: 37, routeKey: "laura" },
+  { name: "Lily Chen", city: "London", x: 39, y: 37, routeKey: "laura" },
   { name: "Theo Jensen", city: "Barcelona", x: 30, y: 62, routeKey: "theo" },
   { name: "Amara Okoye", city: "Lisbon", x: 18, y: 70, routeKey: "amara" },
   { name: "Emma Laurent", city: "Barcelona", x: 47, y: 58, routeKey: "emma" },
@@ -4772,11 +4794,11 @@ const trustPathMapLayout = [
 ];
 
 const trustPathRoutes = [
-  { className: "route-you-laura", from: "You", to: "Laura Chen", type: "active" },
+  { className: "route-you-laura", from: "You", to: "Lily Chen", type: "active" },
   { className: "route-you-theo", from: "You", to: "Theo Jensen", type: "active" },
   { className: "route-you-amara", from: "You", to: "Amara Okoye", type: "active" },
   { className: "route-you-mina", from: "You", to: "Mina Aoki", type: "active" },
-  { className: "route-laura-emma", from: "Laura Chen", to: "Emma Laurent", type: "active" },
+  { className: "route-laura-emma", from: "Lily Chen", to: "Emma Laurent", type: "active" },
   { className: "route-emma-jonas", from: "Emma Laurent", to: "Jonas Berg", type: "active" },
   { className: "route-emma-sofia", from: "Emma Laurent", to: "Sofia Marin", type: "active overlap" },
   { className: "route-theo-jonas", from: "Theo Jensen", to: "Jonas Berg", type: "active" },
@@ -4785,8 +4807,8 @@ const trustPathRoutes = [
 ];
 
 const trustFocusBranches = {
-  "Laura Chen": {
-    path: ["You", "Laura Chen"],
+  "Lily Chen": {
+    path: ["You", "Lily Chen"],
     nearby: ["Emma Laurent", "Locked branch"],
     routes: ["route-you-laura", "route-laura-emma"],
     dotted: [],
@@ -4807,16 +4829,16 @@ const trustFocusBranches = {
     crossCity: "Lisbon"
   },
   "Emma Laurent": {
-    path: ["You", "Laura Chen", "Emma Laurent"],
+    path: ["You", "Lily Chen", "Emma Laurent"],
     nearby: ["Sofia Marin", "Jonas Berg"],
     routes: ["route-you-laura", "route-laura-emma", "route-emma-sofia"],
     dotted: ["route-jonas-sofia"],
     crossCity: "Tokyo"
   },
   "Sofia Marin": {
-    path: ["You", "Laura Chen", "Emma Laurent", "Jonas Berg", "Sofia Marin"],
+    path: ["You", "Lily Chen", "Emma Laurent", "Jonas Berg", "Sofia Marin"],
     paths: [
-      ["You", "Laura Chen", "Emma Laurent", "Sofia Marin"],
+      ["You", "Lily Chen", "Emma Laurent", "Sofia Marin"],
       ["You", "Theo Jensen", "Jonas Berg", "Sofia Marin"]
     ],
     nearby: ["Theo Jensen", "Emma Laurent", "Jonas Berg", "Locked branch", "Trusted branch available", "Unlock through meetup"],
@@ -4870,7 +4892,7 @@ function focusNodePosition(node = {}, focusName = activeNetworkPerson) {
   if (nameKey(node.name) === nameKey(focusName)) return { x: 52, y: 48 };
   const focusPositions = {
     "You": { x: 8, y: 54 },
-    "Laura Chen": { x: 22, y: 42 },
+    "Lily Chen": { x: 22, y: 42 },
     "Emma Laurent": { x: 36, y: 54 },
     "Jonas Berg": { x: 69, y: 54 },
     "Theo Jensen": { x: 52, y: 22 },
@@ -4923,11 +4945,11 @@ function trustMapInitials(name = "") {
 
 function trustPathForPerson(name = activeNetworkPerson) {
   const paths = {
-    "Laura Chen": "You → Laura",
+    "Lily Chen": "You → Lily",
     "Theo Jensen": "You → Theo",
     "Amara Okoye": "You → Amara",
-    "Emma Laurent": "You → Laura → Emma",
-    "Sofia Marin": "You → Laura → Emma → Sofia",
+    "Emma Laurent": "You → Lily → Emma",
+    "Sofia Marin": "You → Lily → Emma → Sofia",
     "Jonas Berg": "You → Theo → Jonas",
     "Mina Aoki": "You → Mina"
   };
@@ -4947,7 +4969,7 @@ function trustFocusPathsForPerson(name = activeNetworkPerson) {
 
 function explorerActionForFocus(focusNode = {}) {
   const { person, state } = trustMapSubject(focusNode);
-  if (focusNode.self) return { primaryAction: { label: "View Full Branch", type: "explore_branch" }, secondaryActions: [] };
+  if (focusNode.self) return { primaryAction: null, secondaryActions: [] };
   return relationshipActionModel(person, { state });
 }
 
@@ -5006,12 +5028,11 @@ function renderExplorerActions(focusNode = {}) {
     ...actionModel.secondaryActions.filter((action) => {
       if (focusNode.self) return false;
       if (action.type === "view_path") return true;
-      if (action.type === "explore_branch") return true;
       if (action.type === "trust_upgrade") return true;
       if (action.type === "view_profile" || action.type === "view_limited") return true;
       return false;
     })
-  ].slice(0, 4);
+  ].filter(Boolean).slice(0, 4);
   return actionSet.map((action) => relationshipActionButton(action, focusNode.name)).join("");
 }
 
@@ -5107,7 +5128,7 @@ function renderExplorerBottomSheet(focusNode = trustMapNodeForName(activeNetwork
       </div>
       <div class="drawer-expanded-content">
         <div class="visual-path"><span>You</span><i></i><strong>${path}</strong></div>
-        ${overlap ? `<div class="overlap-discovery"><strong>${pathCount} Trust Paths Overlap</strong><span>Laura's branch and Theo's branch both reconnect through ${focusNode.name.split(" ")[0]}.</span></div>` : ""}
+        ${overlap ? `<div class="overlap-discovery"><strong>${pathCount} Trust Paths Overlap</strong><span>Lily's branch and Theo's branch both reconnect through ${focusNode.name.split(" ")[0]}.</span></div>` : ""}
         ${renderDrawerPathRows(focusNode.name)}
         <div class="drawer-context-row">
           <span>${focusNode.city}</span>
@@ -5158,7 +5179,7 @@ function renderIntroMethod(method = "mutual") {
   document.querySelector("#introPreview")?.remove();
   const profile = selectedProfile();
   const introPath = getIntroPath(profile.name);
-  const mutualName = introPath.via || "Laura";
+  const mutualName = introPath.via || "Lily";
   const firstName = profile.name.split(" ")[0];
   const title = document.querySelector("#introTitle");
   const pathLine = document.querySelector("#introPathLine");
@@ -5552,7 +5573,7 @@ function bindInteractions() {
       introThreadLeft = false;
       appState.introRequestAccepted = true;
       appState.pendingIntroRequestActive = false;
-      recordUniqueProgression("introductions", "Hugo|Emma|Laura");
+      recordUniqueProgression("introductions", "Hugo|Emma|Lily");
       addNotificationEvent("introChat");
       persistPrototypeState();
       activeChatDetailMode = "intro-group";
@@ -5583,9 +5604,9 @@ function bindInteractions() {
       introThreadLeft = true;
       activeChatDetailMode = "direct_connection_chat";
       selectedChatName = "Emma Laurent";
-      selectedChatPath = "Introduced by Laura";
-      selectedChatPreview = "Laura introduced you both. You can keep chatting directly.";
-      upsertChat("all", { name: "Emma Laurent", path: "Introduced by Laura", preview: selectedChatPreview, time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
+      selectedChatPath = "Introduced by Lily";
+      selectedChatPreview = "Lily introduced you both. You can keep chatting directly.";
+      upsertChat("all", { name: "Emma Laurent", path: "Introduced by Lily", preview: selectedChatPreview, time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
       renderChatDetail();
       persistPrototypeState();
       return;
@@ -5731,7 +5752,7 @@ function bindInteractions() {
 
     const sharePlanSend = event.target.closest("[data-share-plan-send]");
     if (sharePlanSend) {
-      const recipient = sharePlanSend.closest(".share-send-box")?.querySelector("select")?.value || "Laura Chen";
+      const recipient = sharePlanSend.closest(".share-send-box")?.querySelector("select")?.value || "Lily Chen";
       showShareCompleteDialog("plan", recipient);
       return;
     }
@@ -5834,8 +5855,8 @@ function bindInteractions() {
         if (accepted && group === "intro") {
           introThreadStarted = true;
           appState.pendingIntroRequestActive = false;
-          recordUniqueProgression("introductions", `${request.name}|Hugo|Laura`);
-          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+          recordUniqueProgression("introductions", `${request.name}|Hugo|Lily`);
+          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Lily", preview: "Lily introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         }
       }
       card?.classList.add(accepted ? "request-accepted" : "request-declined");
@@ -5996,13 +6017,13 @@ function bindInteractions() {
       chatMode = "default";
       chatFilter = "all";
       appState.pendingIntroRequestActive = true;
-      upsertConnectionRequest("sent", { name: "Emma Laurent", path: "You -> Laura -> Emma", type: introMethod === "mutual" ? "Via mutual friend" : "Direct request", status: introMethod === "mutual" ? "Sent to Laura" : "Waiting" });
+      upsertConnectionRequest("sent", { name: "Emma Laurent", path: "You -> Lily -> Emma", type: introMethod === "mutual" ? "Via mutual friend" : "Direct request", status: introMethod === "mutual" ? "Sent to Lily" : "Waiting" });
       upsertNotification({
         id: `sent-intro-${Date.now()}`,
         kind: "intro",
         title: "Intro request sent",
-        body: introMethod === "mutual" ? "Your intro request was sent to Laura." : "Your direct intro request was sent to Emma.",
-        profile: introMethod === "mutual" ? "Laura Chen" : "Emma Laurent",
+        body: introMethod === "mutual" ? "Your intro request was sent to Lily." : "Your direct intro request was sent to Emma.",
+        profile: introMethod === "mutual" ? "Lily Chen" : "Emma Laurent",
         active: true
       });
       persistPrototypeState();
@@ -6092,7 +6113,7 @@ function bindInteractions() {
     if (trustMapWorld) {
       activeExplorerMode = "map";
       activeNetworkCity = "London";
-      activeNetworkPerson = "Laura Chen";
+      activeNetworkPerson = "Lily Chen";
       previousExplorerPerson = "";
       networkDrawerState = "collapsed";
       renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
@@ -6358,14 +6379,14 @@ function bindInteractions() {
       if (action === "intro-request") {
         appState.pendingIntroRequestActive = true;
         appState.introRequestDeclined = false;
-        upsertConnectionRequest("intro", { name: "Noah Silva", path: "You -> Laura -> Noah", type: "Intro request received", status: "Waiting for you", actions: true });
+        upsertConnectionRequest("intro", { name: "Noah Silva", path: "You -> Lily -> Noah", type: "Intro request received", status: "Waiting for you", actions: true });
         addNotificationEvent("introRequest");
       }
       if (action === "accepted-intro") {
         appState.introRequestAccepted = true;
         introThreadStarted = true;
         introThreadLeft = false;
-        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Lily", preview: "Lily introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         addNotificationEvent("acceptedIntro");
       }
       if (action === "declined-intro") {
@@ -6382,13 +6403,13 @@ function bindInteractions() {
       if (action === "intro-chat") {
         introThreadStarted = true;
         introThreadLeft = false;
-        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+        upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Lily", preview: "Lily introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         addNotificationEvent("introChat");
       }
       if (action === "direct-chat") {
         introThreadLeft = true;
         activeChatDetailMode = "direct_connection_chat";
-        upsertChat("all", { name: "Emma Laurent", path: "Introduced by Laura", preview: "Laura introduced you both. You can keep chatting directly.", time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
+        upsertChat("all", { name: "Emma Laurent", path: "Introduced by Lily", preview: "Lily introduced you both. You can keep chatting directly.", time: "Now", unread: true, type: "Direct Connection Chat", chatType: "direct_connection_chat", meetupRequired: true });
         addNotificationEvent("directChat");
       }
       if (action === "plan-chat") {
@@ -6399,11 +6420,11 @@ function bindInteractions() {
         addNotificationEvent("planChat");
       }
       if (action === "plan-join") {
-        upsertPlanJoinRequest({ name: "Noah Silva", path: "You -> Laura -> Noah", vouch: "2 mutuals", message: "Developer generated join request." });
+        upsertPlanJoinRequest({ name: "Noah Silva", path: "You -> Lily -> Noah", vouch: "2 mutuals", message: "Developer generated join request." });
         addNotificationEvent("planJoin");
       }
       if (action === "plan-approval") {
-        myPlans.pending.unshift({ name: "Developer coffee plan", host: "Emma", path: "You -> Laura -> Emma", time: "Fri, 3:00 PM", location: "Soho", joined: 2, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" });
+        myPlans.pending.unshift({ name: "Developer coffee plan", host: "Emma", path: "You -> Lily -> Emma", time: "Fri, 3:00 PM", location: "Soho", joined: 2, max: 6, visibility: "Mutual connections", status: "Pending approval", role: "pending" });
         addNotificationEvent("planApproval");
       }
       if (action === "trip-overlap") {
@@ -6562,8 +6583,8 @@ function bindInteractions() {
         if (accepted && item.kind === "intro") {
           introThreadStarted = true;
           appState.pendingIntroRequestActive = false;
-          recordUniqueProgression("introductions", `${item.profile || "Emma"}|Hugo|Laura`);
-          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Laura", preview: "Laura introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
+          recordUniqueProgression("introductions", `${item.profile || "Emma"}|Hugo|Lily`);
+          upsertChat("all", { name: "Hugo & Emma", path: "Introduced by Lily", preview: "Lily introduced you both.", time: "Now", unread: true, type: "Intro Chat", chatType: "intro_chat", userRole: "introduced" });
         }
         if (!accepted && item.kind === "intro") {
           appState.pendingIntroRequestActive = false;

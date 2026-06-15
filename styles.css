@@ -5442,7 +5442,7 @@ textarea {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 20px;
+  padding: 20px 52px 20px 20px;
   border-radius: 24px;
   background: rgba(255,255,255,.86);
   transition: transform .22s ease;
@@ -5450,7 +5450,7 @@ textarea {
 }
 
 .notification-card.is-swiped .notification-swipe-content {
-  transform: translateX(-82px);
+  transform: none;
 }
 
 .notification-card.is-swiping .notification-swipe-content {
@@ -5481,25 +5481,63 @@ textarea {
   background: rgba(255,255,255,.68);
 }
 
+#notifications .network-header {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#notifications .network-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#notifications .network-header h1 {
+  font-size: 31px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+#notifications .network-header p {
+  max-width: 240px;
+  font-size: 15px;
+  line-height: 1.28;
+}
+
+#notifications .compact-actions {
+  flex: 0 0 auto;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+#notifications .compact-actions > button {
+  width: auto;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .notification-swipe-clear {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
-  width: 82px;
-  min-height: 100%;
-  border: 0;
-  border-radius: 0 24px 24px 0;
-  background: rgba(188, 76, 92, .12);
-  color: #b24b62;
-  font-size: 13px;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(238,234,254,.74);
+  color: var(--slate);
+  font-size: 18px;
+  line-height: 1;
   font-weight: 900;
   box-shadow: none;
 }
 
 .notification-swipe-clear:hover {
-  background: rgba(188, 76, 92, .18);
+  background: rgba(238,234,254,.95);
 }
 
 .request-card {
