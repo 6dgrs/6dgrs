@@ -5442,7 +5442,7 @@ textarea {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 20px 52px 20px 20px;
+  padding: 20px;
   border-radius: 24px;
   background: rgba(255,255,255,.86);
   transition: transform .22s ease;
@@ -5450,7 +5450,7 @@ textarea {
 }
 
 .notification-card.is-swiped .notification-swipe-content {
-  transform: none;
+  transform: translateX(-76px);
 }
 
 .notification-card.is-swiping .notification-swipe-content {
@@ -5520,24 +5520,25 @@ textarea {
 
 .notification-swipe-clear {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 76px;
+  min-height: 100%;
   padding: 0;
-  border-radius: 999px;
+  border: 0;
+  border-radius: 0 24px 24px 0;
   background: rgba(238,234,254,.74);
-  color: var(--slate);
-  font-size: 18px;
+  color: rgba(255,255,255,.96);
+  font-size: 13px;
   line-height: 1;
   font-weight: 900;
   box-shadow: none;
 }
 
 .notification-swipe-clear:hover {
-  background: rgba(238,234,254,.95);
+  background: rgba(124,114,255,.18);
 }
 
 .request-card {

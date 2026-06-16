@@ -2228,7 +2228,7 @@ function renderNotifications() {
       };
       actions = `<div class="notification-actions">${targets[item.kind] || ""}</div>`;
     }
-    return `<article class="notification-card" data-notification-card="${item.id}"><button class="notification-swipe-clear" type="button" data-clear-notification="${item.id}" aria-label="Clear notification">×</button><div class="notification-swipe-content"><span>${item.title}</span><strong>${item.body}</strong>${actions}</div></article>`;
+    return `<article class="notification-card" data-notification-card="${item.id}"><button class="notification-swipe-clear" type="button" data-clear-notification="${item.id}" aria-label="Clear notification">Clear</button><div class="notification-swipe-content"><span>${item.title}</span><strong>${item.body}</strong>${actions}</div></article>`;
   }).join("") : emptyState("No notifications yet", "Intro requests, plan updates and trip overlaps will appear here.", `<button type="button" class="soft-action" data-settings-detail="developer">Generate test activity</button>`);
   updateNotificationBadges();
 }
