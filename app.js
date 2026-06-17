@@ -37,6 +37,7 @@ let editingTripId = null;
 let instagramAccessUnlocked = false;
 let onboardingSlide = 0;
 let onboardingTimer = null;
+let profileSetupChipResetDone = false;
 let activeChatDetailMode = "default";
 let selectedChatName = "Emma Laurent";
 let selectedChatPath = "You → Lily → Emma";
@@ -249,8 +250,16 @@ function restoreOnboardingDraft(screenId = activeScreenId()) {
     query("#basicGender")?.dispatchEvent(new Event("change", { bubbles: true }));
   }
   if (screenId === "profile-setup" && draft.profileSetup) {
-    queryAll("#profile-setup .selectable button").forEach((button) => {
-      button.classList.toggle("selected", draft.profileSetup.selectedInterests?.includes(button.textContent.trim()));
+    queryAll("#profile-setup .selectable").forEach((group) => {
+      const maxSelected = Number(group.dataset.maxSelected || 0);
+      const groupButtons = queryAll("button", group);
+      const storedSelections = groupButtons
+        .filter((button) => draft.profileSetup.selectedInterests?.includes(button.textContent.trim()))
+        .map((button) => button.textContent.trim());
+      const validSelections = maxSelected && storedSelections.length > maxSelected ? [] : storedSelections.slice(0, maxSelected || storedSelections.length);
+      groupButtons.forEach((button) => {
+        button.classList.toggle("selected", validSelections.includes(button.textContent.trim()));
+      });
     });
     queryAll("#profile-setup textarea, #profile-setup input").forEach((field, index) => {
       if (draft.profileSetup.prompts?.[index] !== undefined) field.value = draft.profileSetup.prompts[index];
@@ -261,7 +270,7 @@ function restoreOnboardingDraft(screenId = activeScreenId()) {
     if (destination) destination.value = draft.trip.destination || "";
     if (query("#tripStartDate")) query("#tripStartDate").value = draft.trip.start || "";
     if (query("#tripEndDate")) query("#tripEndDate").value = draft.trip.end || "";
-    if (query("#tripVisibility") && draft.trip.visibility) query("#tripVisibility").value = draft.trip.visibility;
+    if (query("#tripVisibility") && draft.trip.visibility) query("#tripVisibility").value = normalizePrivacyLevel(draft.trip.visibility);
     if (query("#tripPurpose") && draft.trip.purpose) query("#tripPurpose").value = draft.trip.purpose;
     if (query("#tripReason")) query("#tripReason").value = draft.trip.reason || "";
     const privacyExtra = query("[data-privacy-extra]");
@@ -281,6 +290,15 @@ function clearOnboardingTripDraft() {
   draft.trip = {};
 }
 
+function clearProfileSetupChipDraft() {
+  const draft = getOnboardingDraft();
+  draft.profileSetup = {
+    ...(draft.profileSetup || {}),
+    selectedInterests: []
+  };
+  queryAll("#profile-setup .selectable button").forEach((button) => button.classList.remove("selected"));
+}
+
 const trustedFriendState = {
   used: 4,
   launchCap: 6,
@@ -292,11 +310,12 @@ const trustedFriendState = {
 
 const settingsState = {
   privacy: {
-    currentCity: "Trusted connections only",
-    trips: "Mutuals",
-    intros: "Full trusted network",
-    instagram: "Accepted connections",
-    profile: "Trusted connections only"
+    currentCity: "Trusted Network",
+    trips: "Trusted Network",
+    travelOverlaps: "Trusted Network",
+    intros: "Trusted Network",
+    instagram: "Trusted Connections",
+    profile: "Trusted Network"
   },
   notifications: {
     introRequests: true,
@@ -381,12 +400,118 @@ const notificationItems = [
 ];
 
 const privacyOptions = {
-  currentCity: { title: "Who can see current city", options: ["Nobody", "Trusted connections only", "Mutual connections", "Everyone allowed by trust rules"] },
-  trips: { title: "Who can see trips", options: ["Nobody", "Trusted only", "Mutuals", "Network visibility"] },
-  intros: { title: "Who can request intros", options: ["Nobody", "Trusted connections", "Mutual connections", "Full trusted network"] },
-  instagram: { title: "Who can view Instagram", options: ["Nobody", "Accepted connections", "Trusted connections", "Everyone allowed"] },
-  profile: { title: "Profile visibility", options: ["Hidden", "Trusted connections only", "Mutuals", "Discoverable"] }
+  currentCity: { title: "Current city visibility", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] },
+  trips: { title: "Trip visibility default", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] },
+  travelOverlaps: { title: "Travel overlap suggestions", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] },
+  intros: { title: "Who can request intros", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] },
+  instagram: { title: "Who can view Instagram", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] },
+  profile: { title: "Profile visibility", options: ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"] }
 };
+
+const privacyLevels = ["Hidden", "Trusted Connections", "Trusted Network", "Broader Network"];
+const privacyAliasMap = {
+  hidden: "Hidden",
+  nobody: "Hidden",
+  private: "Hidden",
+  "only visible to me": "Hidden",
+  "trusted connections": "Trusted Connections",
+  "trusted connection": "Trusted Connections",
+  "trusted connections only": "Trusted Connections",
+  "trusted only": "Trusted Connections",
+  "visible to trusted": "Trusted Connections",
+  "direct trusted friends only": "Trusted Connections",
+  "trusted friends only": "Trusted Connections",
+  "trusted network": "Trusted Network",
+  "trusted networks": "Trusted Network",
+  "trusted network only": "Trusted Network",
+  "visible to trusted networks": "Trusted Network",
+  "visible to mutuals": "Trusted Network",
+  "mutuals": "Trusted Network",
+  "mutuals only": "Trusted Network",
+  "mutual connections": "Trusted Network",
+  "2nd degree": "Trusted Network",
+  "2nd degree connections": "Trusted Network",
+  "network visibility": "Broader Network",
+  "broader network": "Broader Network",
+  "public to network": "Broader Network",
+  "show trips publicly": "Broader Network",
+  "open to meetups": "Broader Network",
+  "everyone allowed": "Broader Network",
+  "everyone allowed by trust rules": "Broader Network",
+  discoverable: "Broader Network",
+  "full trusted network": "Trusted Network",
+  "accepted connections": "Trusted Connections"
+};
+
+function normalizePrivacyLevel(value = "", fallback = "Trusted Network") {
+  const normalized = String(value || "").trim();
+  if (privacyLevels.includes(normalized)) return normalized;
+  return privacyAliasMap[normalized.toLowerCase()] || fallback;
+}
+
+function privacyRank(level = "Trusted Network") {
+  return Math.max(0, privacyLevels.indexOf(normalizePrivacyLevel(level)));
+}
+
+function privacyRelationshipRank(person = {}, state = {}) {
+  if (state.locked || state.archived || person.locked) return 99;
+  if (isTrustedConnection(person.name) || isMetConnection(person.name) || person.met) return 1;
+  const degree = Number(state.degree || person.degree || 2);
+  if (degree <= 2 || state.state === "active-path") return 2;
+  return 3;
+}
+
+function privacyAllowsRelationship(level, person = {}, state = {}) {
+  const normalized = normalizePrivacyLevel(level);
+  if (normalized === "Hidden") return false;
+  return privacyRelationshipRank(person, state) <= privacyRank(normalized);
+}
+
+function settingPrivacyLevel(key, fallback = "Trusted Network") {
+  return normalizePrivacyLevel(settingsState.privacy?.[key], fallback);
+}
+
+function tripPrivacyLevel(trip = {}) {
+  return normalizePrivacyLevel(trip.visibility || settingPrivacyLevel("trips"));
+}
+
+function tripVisibleToRelationship(trip = {}, person = {}, state = {}) {
+  return privacyAllowsRelationship(tripPrivacyLevel(trip), person, state);
+}
+
+function tripAllowsTravelDiscovery(trip = {}) {
+  return tripPrivacyLevel(trip) !== "Hidden" && settingPrivacyLevel("travelOverlaps") !== "Hidden";
+}
+
+function currentCityVisibleToRelationship(person = {}, state = {}) {
+  return privacyAllowsRelationship(settingPrivacyLevel("currentCity"), person, state);
+}
+
+function profileVisibleToRelationship(person = {}, state = {}) {
+  return privacyAllowsRelationship(settingPrivacyLevel("profile"), person, state);
+}
+
+function displayPrivacyLabel(value = "", fallback = "Trusted Network") {
+  return normalizePrivacyLevel(value, fallback);
+}
+
+function visibleCityLabel(person = {}, state = {}) {
+  const city = person.livesIn || person.city || "";
+  if (!city) return "";
+  return currentCityVisibleToRelationship(person, state) ? city : "City hidden";
+}
+
+function normalizePrototypePrivacyState() {
+  Object.keys(settingsState.privacy).forEach((key) => {
+    settingsState.privacy[key] = normalizePrivacyLevel(settingsState.privacy[key], key === "instagram" ? "Trusted Connections" : "Trusted Network");
+  });
+  [myTrips, homeTrips].forEach((trips) => trips.forEach((trip) => {
+    if (trip.visibility) trip.visibility = normalizePrivacyLevel(trip.visibility);
+  }));
+  [discoverablePlans, ...Object.values(myPlans)].forEach((plans) => plans.forEach((plan) => {
+    if (plan.visibility && !/invite/i.test(plan.visibility)) plan.visibility = normalizePrivacyLevel(plan.visibility);
+  }));
+}
 
 const homeTrips = [
   { id: "barcelona-nov", city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15" },
@@ -395,13 +520,13 @@ const homeTrips = [
 ];
 
 const myTrips = [
-  { id: "london-jun", city: "London", country: "United Kingdom", start: "2026-06-01", end: "2026-06-06", visibility: "trusted network only", status: "Open to meetups" },
-  { id: "barcelona-jun", city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "visible to trusted networks", status: "Same dates active" },
-  { id: "paris-jul", city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "open to meetups", status: "Upcoming" },
-  { id: "tokyo-jul", city: "Tokyo", country: "Japan", start: "2026-07-18", end: "2026-07-25", visibility: "mutuals only", status: "Planning" },
-  { id: "lisbon-aug", city: "Lisbon", country: "Portugal", start: "2026-08-18", end: "2026-08-22", visibility: "mutuals only", status: "Upcoming" },
-  { id: "barcelona-nov", city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "open to meetups", status: "Trip selector active" },
-  { id: "oslo-apr", city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "trusted network only", status: "past" }
+  { id: "london-jun", city: "London", country: "United Kingdom", start: "2026-06-01", end: "2026-06-06", visibility: "Trusted Network", status: "Open to meetups" },
+  { id: "barcelona-jun", city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "Trusted Network", status: "Same dates active" },
+  { id: "paris-jul", city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "Broader Network", status: "Upcoming" },
+  { id: "tokyo-jul", city: "Tokyo", country: "Japan", start: "2026-07-18", end: "2026-07-25", visibility: "Trusted Network", status: "Planning" },
+  { id: "lisbon-aug", city: "Lisbon", country: "Portugal", start: "2026-08-18", end: "2026-08-22", visibility: "Trusted Network", status: "Upcoming" },
+  { id: "barcelona-nov", city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "Broader Network", status: "Trip selector active" },
+  { id: "oslo-apr", city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "Trusted Network", status: "past" }
 ];
 
 const homePeople = [
@@ -601,7 +726,7 @@ function updateHomeTripDateRange() {
       country,
       start: document.querySelector("#tripStartDate")?.value,
       end: document.querySelector("#tripEndDate")?.value,
-      visibility: "trusted network only",
+      visibility: settingPrivacyLevel("trips"),
       status: "New trip",
       purpose,
       reason,
@@ -684,10 +809,9 @@ function renderTripEditor() {
     button.classList.toggle("selected", Boolean(trip.hiddenFrom?.includes(button.textContent.trim())));
   });
   if (visibility) {
-    const normalized = (trip.visibility || "").toLowerCase();
+    const normalized = tripPrivacyLevel(trip);
     [...visibility.options].forEach((option) => {
-      const optionValue = option.textContent.toLowerCase();
-      option.selected = normalized.includes(optionValue) || optionValue.includes(normalized.replace("visible to ", ""));
+      option.selected = normalizePrivacyLevel(option.textContent) === normalized;
     });
   }
   markScreenClean("trip");
@@ -708,7 +832,7 @@ function saveEditedTrip() {
   trip.country = country;
   trip.start = document.querySelector("#tripStartDate")?.value || trip.start;
   trip.end = document.querySelector("#tripEndDate")?.value || trip.end;
-  trip.visibility = visibility.toLowerCase();
+  trip.visibility = normalizePrivacyLevel(visibility);
   trip.purpose = purpose;
   trip.reason = reason;
   trip.hiddenFrom = hiddenFrom;
@@ -720,6 +844,7 @@ function saveEditedTrip() {
     homeTrip.country = trip.country;
     homeTrip.start = trip.start;
     homeTrip.end = trip.end;
+    homeTrip.visibility = trip.visibility;
     homeTrip.reason = trip.reason;
     homeTrip.purpose = trip.purpose;
     homeTrip.hiddenFrom = trip.hiddenFrom;
@@ -775,7 +900,9 @@ function personTripInCity(person, context) {
 function personTripOverlaps(person, context) {
   const trip = context?.trip || context;
   if (!trip?.city || !trip?.start || !trip?.end) return false;
+  if (!tripAllowsTravelDiscovery(trip)) return false;
   return (person.trips || []).some((personTrip) => (
+    tripAllowsTravelDiscovery(personTrip) &&
     sameCity(personTrip.city, trip?.city) &&
     datesOverlap(personTrip.start, personTrip.end, trip.start, trip.end)
   ));
@@ -805,9 +932,9 @@ function planRelationshipLabel(plan) {
   const parts = pathParts(plan.path || "");
   if (parts.length > 2) return `Mutual via ${parts[1]}`;
   if (plan.visibility.includes("2nd")) return "2nd Degree";
-  if (plan.visibility.includes("Trusted")) return "Trusted Network";
-  if (plan.visibility.includes("Mutual")) return "Mutual connections";
-  return plan.visibility;
+  if (plan.visibility.includes("Trusted")) return displayPrivacyLabel(plan.visibility);
+  if (plan.visibility.includes("Mutual")) return "Trusted Network";
+  return /invite/i.test(plan.visibility || "") ? "Invite link only" : displayPrivacyLabel(plan.visibility);
 }
 
 function planTrustState(plan) {
@@ -837,22 +964,25 @@ function homeCardContext(person) {
   const cityTrip = personTripInCity(person, context);
   const isLocal = personLivesInTripCity(person, context);
   const overlaps = personTripOverlaps(person, context);
+  const state = connectionStateForPerson(person) || {};
+  const cityLabel = visibleCityLabel(person, state);
+  const tripCity = cityLabel === "City hidden" ? "a hidden city" : cityTrip?.city;
 
   if (homeFilter === "same" && cityTrip && overlaps) {
     const days = overlapDayCount(cityTrip.start, cityTrip.end, context.trip?.start, context.trip?.end);
-    return `Also in ${cityTrip.city} · ${compactTripRange(cityTrip)} · Same dates as you · Overlaps ${days} day${days === 1 ? "" : "s"}`;
+    return cityLabel === "City hidden" ? `Travel overlap available · ${days} day${days === 1 ? "" : "s"}` : `Also in ${cityTrip.city} · ${compactTripRange(cityTrip)} · Same dates as you · Overlaps ${days} day${days === 1 ? "" : "s"}`;
   }
   if (homeFilter === "in-town" && cityTrip && !isLocal) {
-    return `${person.city} · In town until ${displayTripDate(cityTrip.end || cityTrip.start)}`;
+    return `${cityLabel || "City hidden"} · In town until ${displayTripDate(cityTrip.end || cityTrip.start)}`;
   }
   if (homeFilter === "locals" && isLocal) {
-    return `${person.city} · Based in ${person.livesIn}`;
+    return `${cityLabel || "City hidden"} · Based in ${cityLabel || "your trusted network"}`;
   }
   if (isLocal) {
-    return `${person.city} · Local connection based in ${person.livesIn}`;
+    return `${cityLabel || "City hidden"} · Local connection`;
   }
   if (cityTrip) {
-    return `${person.city} · Visiting ${cityTrip.city}`;
+    return `${cityLabel || "City hidden"} · Visiting ${tripCity}`;
   }
   return "";
 }
@@ -903,6 +1033,7 @@ function bestTripOverlap(person) {
   let best = null;
   personTrips.forEach((personTrip) => {
     myTrips.forEach((myTrip) => {
+      if (!tripAllowsTravelDiscovery(myTrip) || !tripAllowsTravelDiscovery(personTrip)) return;
       if (!sameCity(personTrip.city, myTrip.city)) return;
       const overlap = overlapDayCount(personTrip.start, personTrip.end, myTrip.start, myTrip.end);
       if (overlap && (!best || overlap > best.overlap)) best = { personTrip, myTrip, overlap };
@@ -962,13 +1093,19 @@ function suggestedConnections() {
 }
 
 function suggestedLocationLine(person) {
+  const state = connectionStateForPerson(person) || {};
+  const cityLabel = visibleCityLabel(person, state);
   const overlap = bestTripOverlap(person);
-  if (overlap) return `${person.city} · Also in ${overlap.personTrip.city} ${compactTripRange(overlap.personTrip)}`;
-  if (person.livesIn === activeHomeCity || person.city === activeHomeCity) return `${person.city} · In your network this week`;
-  if ((person.tags || []).some((tag) => ["coffee", "gallery", "design"].includes(semanticBucket(tag)))) {
-    return `${person.city} · Shared gallery + coffee interests`;
+  if (overlap) {
+    return cityLabel === "City hidden"
+      ? "City hidden · Travel overlap available"
+      : `${cityLabel} · Also in ${overlap.personTrip.city} ${compactTripRange(overlap.personTrip)}`;
   }
-  return `${person.city} · ${person.suggestionReason || "Curated through your trusted network"}`;
+  if (person.livesIn === activeHomeCity || person.city === activeHomeCity) return `${cityLabel || "City hidden"} · In your network this week`;
+  if ((person.tags || []).some((tag) => ["coffee", "gallery", "design"].includes(semanticBucket(tag)))) {
+    return `${cityLabel || "City hidden"} · Shared gallery + coffee interests`;
+  }
+  return `${cityLabel || "City hidden"} · ${person.suggestionReason || "Curated through your trusted network"}`;
 }
 
 function currentTrustedFriendCap() {
@@ -1065,9 +1202,9 @@ const previewPlans = [
 ];
 
 const emmaTrips = [
-  { city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "open to meetups", status: "same dates" },
-  { city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "trusted network only", status: "visible" },
-  { city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "past visible", status: "past" }
+  { city: "Barcelona", country: "Spain", start: "2026-06-12", end: "2026-06-16", visibility: "Broader Network", status: "same dates" },
+  { city: "Paris", country: "France", start: "2026-07-04", end: "2026-07-07", visibility: "Trusted Network", status: "visible" },
+  { city: "Oslo", country: "Norway", start: "2026-04-11", end: "2026-04-14", visibility: "Trusted Network", status: "past" }
 ];
 
 const emmaPlans = {
@@ -1114,7 +1251,7 @@ const personProfiles = {
     stats: "9 countries visited · 5 trusted hubs",
     vouches: [["Amara", "\"Warm, generous and thoughtful.\""], ["Emma", "\"Knows quiet places well.\""]],
     instagram: "noah.silva",
-    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "open to meetups", status: "same dates" }],
+    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-08", end: "2026-11-15", visibility: "Broader Network", status: "same dates" }],
     plans: {
       hosting: [{ name: "Rooftop Drinks in Soho", host: "Noah", path: "You -> Emma -> Noah", time: "Fri, 7:00 PM", location: "Soho", city: "London", joined: 4, max: 6, visibility: "2nd Degree", status: "Open to request", viewerStatus: "discoverable" }],
       attending: [],
@@ -1135,7 +1272,7 @@ const personProfiles = {
     stats: "7 countries visited · 3 trusted hubs",
     vouches: [["Emma", "\"Curious and easy company.\""]],
     instagram: "camille.roux",
-    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-12", end: "2026-11-16", visibility: "open to meetups", status: "same dates overlap" }],
+    trips: [{ city: "Barcelona", country: "Spain", start: "2026-11-12", end: "2026-11-16", visibility: "Broader Network", status: "same dates overlap" }],
     plans: { hosting: [], attending: [], past: [] }
   },
   "Maya Brooks": {
@@ -1443,6 +1580,7 @@ function applyStoredPrototypeState() {
   if (typeof stored.activeHomeCity === "string") activeHomeCity = stored.activeHomeCity;
   if (typeof stored.activeHomeSelectorValue === "string") activeHomeSelectorValue = stored.activeHomeSelectorValue;
   if (typeof stored.homeFilter === "string") homeFilter = stored.homeFilter;
+  normalizePrototypePrivacyState();
   const storedProductTourCompleted = window.localStorage.getItem("productTourCompleted");
   if (storedProductTourCompleted === "true") {
     appState.productTourCompleted = true;
@@ -1481,7 +1619,15 @@ function persistPrototypeState() {
 }
 
 function activeNotificationCount() {
-  return notificationItems.filter((item) => item.active).length;
+  return visibleNotificationItems().length;
+}
+
+function visibleNotificationItems() {
+  return notificationItems.filter((item) => {
+    if (!item.active) return false;
+    if (String(item.kind || "").startsWith("travel-") && (settingPrivacyLevel("travelOverlaps") === "Hidden" || settingPrivacyLevel("currentCity") === "Hidden")) return false;
+    return true;
+  });
 }
 
 function updateNotificationBadges() {
@@ -1743,7 +1889,7 @@ function publishCreatedPlan() {
   const dateValue = fields[2]?.value || "";
   const timeValue = fields[3]?.value || "";
   const maxValue = Math.min(Number(fields[4]?.value || 4), 6);
-  const visibility = fields[5]?.value || "Mutual connections";
+  const visibility = /invite/i.test(fields[5]?.value || "") ? "Invite link only" : normalizePrivacyLevel(fields[5]?.value || "Trusted Network");
   const [location = locationValue] = locationValue.split(",").map((part) => part.trim()).filter(Boolean);
   const displayDate = dateValue ? new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" }) : "Soon";
   const displayTime = timeValue || "TBC";
@@ -1960,6 +2106,10 @@ function showScreen(id, options = {}) {
   const current = activeScreenId();
   captureOnboardingDraft(current);
   syncSignupPhoneState();
+  if (id === "profile-setup" && !profileSetupChipResetDone) {
+    clearProfileSetupChipDraft();
+    profileSetupChipResetDone = true;
+  }
   if (!options.replace && current && current !== id) {
     screenHistory.push(current);
   }
@@ -2157,9 +2307,10 @@ function showShareCompleteDialog(type, recipient) {
 }
 
 function syncSettingsRows() {
+  normalizePrototypePrivacyState();
   Object.entries(settingsState.privacy).forEach(([key, value]) => {
     const target = document.querySelector(`[data-setting-value="${key}"]`);
-    if (target) target.textContent = value;
+    if (target) target.textContent = displayPrivacyLabel(value);
   });
   Object.entries(settingsState.notifications).forEach(([key, enabled]) => {
     const row = document.querySelector(`[data-notification-setting="${key}"]`);
@@ -2207,7 +2358,7 @@ function openDirectChatWith(name = "Emma Laurent", options = {}) {
 function renderNotifications() {
   const list = document.querySelector("#notifications .notification-list");
   if (!list) return;
-  const activeItems = notificationItems.filter((item) => item.active);
+  const activeItems = visibleNotificationItems();
   list.innerHTML = activeItems.length ? activeItems.map((item) => {
     let actions = "";
     if (item.kind === "intro" || item.kind === "plan") {
@@ -2314,7 +2465,7 @@ function openPrivacySelector(key) {
     <div class="discard-card settings-selector-card" role="dialog" aria-modal="true" aria-label="${setting.title}">
       <h2>${setting.title}</h2>
       <div class="select-group single-select">
-        ${setting.options.map((option) => `<button type="button" class="option-card ${settingsState.privacy[key] === option ? "selected" : ""}" data-privacy-option="${key}" data-privacy-value="${option}" aria-pressed="${settingsState.privacy[key] === option}">${option}</button>`).join("")}
+        ${setting.options.map((option) => `<button type="button" class="option-card ${settingPrivacyLevel(key) === option ? "selected" : ""}" data-privacy-option="${key}" data-privacy-value="${option}" aria-pressed="${settingPrivacyLevel(key) === option}">${option}</button>`).join("")}
       </div>
       <div><button type="button" data-dialog-close>Cancel</button><button type="button" data-save-privacy-setting="${key}">Save</button></div>
     </div>
@@ -3083,6 +3234,13 @@ const TrustGraphEngine = {
     if (plan.mine || plan.host === "You" || plan.host === "Hugo" || plan.role === "hosting") {
       return { active: true, locked: false, label: "Hosted by You", action: "Manage Plan" };
     }
+    const hostState = this.getRelationshipState(plan.host, { person: { name: plan.host, path: plan.path, degree: plan.visibility?.includes("2nd") ? 2 : 3 } }) || {};
+    if (!/invite/i.test(plan.visibility || "") && normalizePrivacyLevel(plan.visibility) === "Hidden") {
+      return { active: false, hidden: true, locked: false, label: "Hidden", action: "Hidden" };
+    }
+    if (!/invite/i.test(plan.visibility || "") && !privacyAllowsRelationship(plan.visibility, { name: plan.host, path: plan.path, degree: hostState.degree || 3 }, hostState)) {
+      return { active: false, locked: true, label: "Locked by visibility", action: "Locked", note: "This plan is outside your current trust visibility." };
+    }
     if (plan.role === "attending" || plan.role === "pending" || plan.role === "past" || ["accepted", "pending", "past"].includes(plan.viewerStatus)) {
       return { active: true, locked: false, label: planRelationshipLabel(plan), action: "Open" };
     }
@@ -3104,7 +3262,7 @@ const TrustGraphEngine = {
   },
 
   getVisibleConnections(city = "Oslo") {
-    return cityGraphPeople(city).filter(({ state }) => !state.locked && !state.archived);
+    return cityGraphPeople(city).filter(({ person, state }) => !state.locked && !state.archived && profileVisibleToRelationship(person, state));
   },
 
   getLockedBranches(userId, city = "") {
@@ -3189,7 +3347,7 @@ const TrustGraphEngine = {
     const ranked = homePeople
       .filter((person) => {
         const state = this.getRelationshipState(person.name, { person });
-        return !person.locked && !state?.locked && !state?.archived;
+        return !person.locked && !state?.locked && !state?.archived && profileVisibleToRelationship(person, state);
       })
       .map(suggestedConnectionScore)
       .sort((a, b) => b.score - a.score);
@@ -3210,7 +3368,7 @@ const TrustGraphEngine = {
   getEligiblePlans(plans = discoverablePlans) {
     return plans
       .map((plan) => ({ plan, trustState: this.getPlanTrustState(plan) }))
-      .filter(({ trustState }) => trustState.active || trustState.locked);
+      .filter(({ trustState }) => !trustState.hidden && (trustState.active || trustState.locked));
   },
 
   getIntroPath(targetUserId) {
@@ -3396,8 +3554,9 @@ function renderProfile() {
     ...actionModel.secondaryActions.filter((action) => action.type === "trust_upgrade")
   ].filter((action) => action && !["view_profile", "view_limited", "view_path", "explore_branch"].includes(action.type));
   const primaryAction = profileHeaderActions.map((action) => relationshipActionButton(action, profile.name)).join("");
-  const canSeeFullProfile = ["trusted", "met"].includes(actionModel.level);
-  const canSeeLimitedProfile = !["archived", "locked"].includes(actionModel.level);
+  const privacyAllowsProfile = profileVisibleToRelationship({ name: profile.name, degree: connectionState.degree }, connectionState);
+  const canSeeFullProfile = ["trusted", "met"].includes(actionModel.level) && privacyAllowsProfile;
+  const canSeeLimitedProfile = privacyAllowsProfile && !["archived", "locked"].includes(actionModel.level);
   const limitedVisibility = !canSeeFullProfile;
   const visibleInterests = canSeeFullProfile ? profile.interests : profile.interests.slice(0, 4);
   const visibleTrips = canSeeFullProfile ? upcomingTrips : upcomingTrips.slice(0, 1);
@@ -3405,14 +3564,14 @@ function renderProfile() {
     <div class="cover"></div>
     <section class="profile-head">
       <div class="profile-avatar">${profile.initials}</div><div class="verified">Verified</div>
-      <h1>${profile.name}</h1><span class="trust-badge relationship-badge" title="${connectionState.degreeLabel || relationshipLabel}">${relationshipLabel}</span><p>Currently in ${profile.city} · ${connectionState.path}</p>
+      <h1>${profile.name}</h1><span class="trust-badge relationship-badge" title="${connectionState.degreeLabel || relationshipLabel}">${relationshipLabel}</span><p>${currentCityVisibleToRelationship({ name: profile.name, city: profile.city, degree: connectionState.degree }, connectionState) ? `Currently in ${profile.city}` : "Current city hidden"} · ${connectionState.path}</p>
       <div class="profile-actions">${primaryAction}${canSeeLimitedProfile ? `<button type="button" data-share-profile>Share Profile</button>` : ""}</div>
     </section>
     ${canSeeLimitedProfile ? `<section class="content-section"><h2>About</h2><p class="about-copy">${profile.bio}</p><div class="chip-cloud static">${visibleInterests.map((interest) => `<span>${interest}</span>`).join("")}</div></section>` : ""}
-    ${limitedVisibility ? `<section class="content-section limited-profile-note"><h2>Limited profile</h2><p class="section-note">More media, trips, plans and branch access unlock after an introduction or verified meetup.</p></section>` : ""}
+    ${limitedVisibility ? `<section class="content-section limited-profile-note"><h2>Limited profile</h2><p class="section-note">More media, trips, plans and branch access unlock after an introduction, verified meetup, or a broader profile visibility setting.</p></section>` : ""}
     ${canSeeFullProfile ? profilePhotoGridMarkup(profile) : ""}
     ${trustSnapshotMarkup(profile, connectionState)}
-    ${visibleTrips.length ? `<section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2>${canSeeFullProfile ? `<button data-next="person-trips">View all trips →</button>` : ""}</div><div class="profile-carousel discovery-trips">${visibleTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${trip.visibility} · ${trip.status}</span></div>`).join("")}</div></section>` : ""}
+    ${visibleTrips.length ? `<section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2>${canSeeFullProfile ? `<button data-next="person-trips">View all trips →</button>` : ""}</div><div class="profile-carousel discovery-trips">${visibleTrips.map((trip) => `<div class="trip-row"><strong>${trip.city}</strong><span>${displayTripRange(trip)} · ${displayPrivacyLabel(trip.visibility)} · ${trip.status}</span></div>`).join("")}</div></section>` : ""}
     ${canSeeFullProfile ? `<section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>${activePlans} active · ${pastPlans} past</span></div><button data-next="person-plans">View all Plans →</button></div>${allPlans.slice(0, 2).map(planPreviewRow).join("") || `<div class="trip-row muted"><strong>No visible plans</strong><span>No current plan previews</span></div>`}</section>` : ""}
     ${canSeeFullProfile ? `<section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>${profile.stats}</p><button data-next="network-map">Open Network Explorer</button></div></section>` : ""}
     ${profile.vouches?.length ? `<section class="content-section"><h2>Vouched By</h2><div class="testimonial-row">${profile.vouches.slice(0, canSeeFullProfile ? profile.vouches.length : 1).map(([name, quote]) => `<div>${name}<span>${quote}</span></div>`).join("")}</div></section>` : ""}
@@ -3491,6 +3650,7 @@ function personCard(person, index = 0) {
             : person.path);
   const discoveryContext = isHomeDiscovery ? homeCardContext(person) : "";
   const suggestionContext = person.suggestionReason ? suggestedLocationLine(person) : "";
+  const cardCity = visibleCityLabel(person, pathState || {});
   const suggestionWhy = person.suggestionReasons?.length
     ? `<div class="suggestion-why"><strong>Because you both...</strong>${person.suggestionReasons.map((reason) => `<span>${reason}</span>`).join("")}</div>`
     : "";
@@ -3500,7 +3660,7 @@ function personCard(person, index = 0) {
       <div>
         <h3>${person.name}</h3>
         <span class="trust-badge relationship-badge">${relationship}</span>
-        <p>${suggestionContext || discoveryContext || `${person.city} · ${context}`}</p>
+        <p>${suggestionContext || discoveryContext || `${cardCity || "City hidden"} · ${context}`}</p>
         ${suggestionWhy}
       </div>
       ${relationshipActionButton(actionModel.primaryAction, person.name)}
@@ -3568,7 +3728,7 @@ function planShareComposer() {
           <h3>${plan.name}</h3>
           <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${plan.viewerStatus === "pending" ? "Pending Approval" : "Open to Join"}</span></div>
           <p>${plan.location} · ${plan.time}</p>
-          <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${plan.visibility}</span></div>
+          <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${/invite/i.test(plan.visibility || "") ? "Invite link only" : displayPrivacyLabel(plan.visibility)}</span></div>
           <small class="context-copy">Share this plan with someone trusted. They will still need host approval before chat unlocks.</small>
         </div>
       </article>
@@ -3613,10 +3773,7 @@ function planCard(plan, index = 0, compact = false) {
           : trustState.locked ? "Locked Path"
           : spotsLeft === 0 ? "Full" : "Open to Join";
   const spotBadge = spotsLeft === 0 ? "Full" : `${spotsLeft} Spot${spotsLeft === 1 ? "" : "s"} Left`;
-  const visibilityBadge = plan.visibility.includes("Invite") ? "Invite Only"
-    : plan.visibility.includes("Trusted") ? "Trusted Circle Only"
-      : plan.visibility.includes("Mutual") ? "Mutuals Only"
-        : plan.visibility;
+  const visibilityBadge = plan.visibility.includes("Invite") ? "Invite Only" : displayPrivacyLabel(plan.visibility);
   const planContext = isHosting
     ? "You are hosting - manage requests before people enter chat."
     : isAttending || plan.viewerStatus === "accepted"
@@ -3627,7 +3784,7 @@ function planCard(plan, index = 0, compact = false) {
           ? "This plan has ended - archived chat is read only."
           : trustState.locked
             ? trustState.note
-          : `Open to ${plan.visibility.toLowerCase()} visiting ${plan.location}.`;
+          : `Open to ${visibilityBadge.toLowerCase()} visiting ${plan.location}.`;
   return `
     <article class="plan-card ${compact ? "compact" : ""} ${isPast ? "past-plan-card" : ""} ${trustState.locked ? "locked-relation" : ""}">
       <div class="avatar" style="background:linear-gradient(145deg, ${index % 2 ? "#79dccb,#7c72ff" : "#ffbfa3,#a79cff"})"></div>
@@ -3678,7 +3835,7 @@ function myPlanCard(plan, index = 0) {
         <h3>${plan.name}</h3>
         <div class="plan-status-line"><span class="trust-badge">${hostLabel}</span><span class="trust-badge plan-state">${statusBadge}</span></div>
         <p>${plan.location} · ${plan.time}</p>
-        <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${plan.visibility}</span></div>
+        <div class="plan-meta"><span>${plan.joined}/${max} attending</span><span>${/invite/i.test(plan.visibility || "") ? "Invite link only" : displayPrivacyLabel(plan.visibility)}</span></div>
         ${context ? `<small class="context-copy">${context}</small>` : ""}
       </div>
       <div class="plan-card-actions">${actions}</div>
@@ -3739,7 +3896,7 @@ function saveEditedPlan() {
   if (location) plan.location = location;
   if (description) plan.description = description;
   if (Number.isFinite(max)) plan.max = Math.min(max, 6);
-  if (visibility) plan.visibility = visibility;
+  if (visibility) plan.visibility = /invite/i.test(visibility) ? "Invite link only" : normalizePrivacyLevel(visibility);
   if (date || time) {
     const day = date ? new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short" }) : (plan.time.split(",")[0] || "Soon");
     plan.time = `${day}, ${time || plan.time.split(", ")[1] || "TBC"}`;
@@ -3920,7 +4077,7 @@ function personPlanCard(plan, index = 0) {
         <h3>${plan.name}</h3>
         <div class="plan-status-line"><span class="trust-badge">Hosted by ${plan.host}</span><span class="trust-badge plan-state">${badge}</span></div>
         <p>${plan.location} · ${plan.time}</p>
-        <div class="plan-meta"><span>${plan.joined}/${Math.min(plan.max, 6)} attending</span><span>${plan.visibility}</span></div>
+        <div class="plan-meta"><span>${plan.joined}/${Math.min(plan.max, 6)} attending</span><span>${/invite/i.test(plan.visibility || "") ? "Invite link only" : displayPrivacyLabel(plan.visibility)}</span></div>
         <small class="context-copy">${context}</small>
       </div>
       ${action ? `<div class="plan-card-actions">${action}</div>` : ""}
@@ -3990,7 +4147,7 @@ function tripCard(trip, manageable = false) {
       <span class="trip-country">${trip.country}</span>
       <span class="trip-dates">${displayTripRange(trip)}</span>
       ${trip.reason ? `<span class="trip-context">Here for: ${trip.reason}</span>` : ""}
-      <span class="trust-badge">${trip.visibility}</span>
+      <span class="trust-badge">${displayPrivacyLabel(trip.visibility)}</span>
       ${trip.status ? `<span class="trust-badge trip-status">${trip.status}</span>` : ""}
       ${manageable ? tripManagementActions(trip) : ""}
     </article>
@@ -4727,7 +4884,7 @@ function networkPathSummary(person = {}, state = {}) {
 
 function renderNetworkCityButton(city) {
   const people = cityGraphPeople(city);
-  const visible = people.filter(({ state }) => !state.locked && !state.archived);
+  const visible = people.filter(({ person, state }) => !state.locked && !state.archived && profileVisibleToRelationship(person, state));
   const locked = people.length - visible.length;
   const activeClass = sameCity(city, activeNetworkCity) ? "active" : "";
   return `
@@ -5051,22 +5208,24 @@ function trustMapNodeMarkup(node, options = {}) {
   const focusVisible = options.focusNodes?.has(nameKey(node.name));
   const branchVisible = focusMode && focusVisible && !selected && !node.self;
   const hidden = focusMode && !focusVisible;
+  const privacyLimited = !node.self && !node.locked && !profileVisibleToRelationship(person, state);
+  const nodeCity = node.locked ? "Hidden" : visibleCityLabel(person, state) || node.city;
   const visible = !hidden;
   const position = focusMode ? focusNodePosition(node, activeNetworkPerson) : { x: node.x, y: node.y };
   const className = [
     "trust-map-node",
     node.self ? "self" : "",
-    node.locked || state.locked ? "locked" : networkNodeClass(person, state),
+    node.locked || state.locked || privacyLimited ? "locked" : networkNodeClass(person, state),
     selected ? "selected" : "",
     branchVisible ? "branch-visible" : "",
-    node.locked ? "locked-potential" : "",
+    node.locked || privacyLimited ? "locked-potential" : "",
     visible ? "" : "focus-hidden"
   ].filter(Boolean).join(" ");
   return `
     <button class="${className}" style="--x:${position.x}%;--y:${position.y}%;" type="button" ${node.locked ? `data-locked-network="${node.city}"` : `data-network-person="${node.name}"`} aria-label="${node.locked ? "Locked branch" : `Select ${node.name}`}">
-      <span>${trustMapInitials(node.name)}</span>
-      <strong>${node.locked ? (node.hint || "Locked") : node.self ? "You" : node.name.split(" ")[0]}</strong>
-      <em>${node.locked ? "Hidden" : node.city}</em>
+      <span>${privacyLimited ? "🔒" : trustMapInitials(node.name)}</span>
+      <strong>${node.locked || privacyLimited ? (node.hint || "Limited") : node.self ? "You" : node.name.split(" ")[0]}</strong>
+      <em>${nodeCity}</em>
     </button>
   `;
 }
@@ -5227,11 +5386,17 @@ function setPrivacyMode(selected) {
     const hasActive = modes.some((option) => option.classList.contains("active"));
     if (!hasActive) modes[0].classList.add("active");
   } else {
-    const activeCount = modes.filter((option) => option.classList.contains("active")).length;
-    const isActive = selected.classList.contains("active");
-    if (!(isActive && activeCount === 1)) {
-      selected.classList.toggle("active");
-    }
+    modes.forEach((option) => option.classList.remove("active"));
+    selected.classList.add("active");
+    const level = normalizePrivacyLevel(selected.dataset.privacyMode || selected.textContent);
+    settingsState.privacy.profile = level;
+    settingsState.privacy.currentCity = level;
+    settingsState.privacy.trips = level;
+    settingsState.privacy.travelOverlaps = level;
+    syncSettingsRows();
+    renderHomeSuggestions();
+    renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+    persistPrototypeState();
   }
 
   modes.forEach((option) => {
@@ -6263,11 +6428,17 @@ function bindInteractions() {
     if (savePrivacy) {
       const key = savePrivacy.dataset.savePrivacySetting;
       const selected = document.querySelector(`[data-privacy-option="${key}"].selected`);
-      if (selected) settingsState.privacy[key] = selected.dataset.privacyValue;
+      if (selected) settingsState.privacy[key] = normalizePrivacyLevel(selected.dataset.privacyValue);
       closeActiveDialog();
       syncSettingsRows();
+      renderHomePeople();
+      renderHomePlans();
+      renderHomeSuggestions();
+      renderSuggestedConnectionsPage();
+      renderNetworkExplorer(activeNetworkCity, activeNetworkPerson);
+      renderNotifications();
       persistPrototypeState();
-      showUtilityFeedback("Privacy updated", `${privacyOptions[key]?.title || "Setting"} is now ${settingsState.privacy[key]}.`);
+      showUtilityFeedback("Privacy updated", `${privacyOptions[key]?.title || "Setting"} is now ${displayPrivacyLabel(settingsState.privacy[key])}.`);
       return;
     }
 
@@ -6429,7 +6600,7 @@ function bindInteractions() {
       }
       if (action === "trip-overlap") {
         appState.generatedTrips += 1;
-        homeTrips.unshift({ id: `developer-overlap-${Date.now()}`, city: "Barcelona", country: "Spain", start: "2026-11-10", end: "2026-11-14", visibility: "trusted network only", status: "Trip overlap" });
+        homeTrips.unshift({ id: `developer-overlap-${Date.now()}`, city: "Barcelona", country: "Spain", start: "2026-11-10", end: "2026-11-14", visibility: "Trusted Network", status: "Trip overlap" });
         addNotificationEvent("tripOverlap");
       }
       if (action === "notifications") {
@@ -6438,7 +6609,7 @@ function bindInteractions() {
       }
       if (action === "trips") {
         appState.generatedTrips += 1;
-        myTrips.unshift({ id: `developer-trip-${Date.now()}`, city: "Madrid", country: "Spain", start: "2026-09-12", end: "2026-09-15", visibility: "trusted network only", status: "Developer trip" });
+        myTrips.unshift({ id: `developer-trip-${Date.now()}`, city: "Madrid", country: "Spain", start: "2026-09-12", end: "2026-09-15", visibility: "Trusted Network", status: "Developer trip" });
         addNotificationEvent("trip");
       }
       if (action === "empty-states") {
@@ -6734,6 +6905,7 @@ function bindInteractions() {
       const selectedCount = group?.querySelectorAll("button.selected").length || 0;
       if (!selectable.classList.contains("selected") && maxSelected && selectedCount >= maxSelected) {
         selectable.blur();
+        showUtilityFeedback("Choose up to 3", "You can pick a maximum of 3 here.");
         return;
       }
       selectable.classList.toggle("selected");
