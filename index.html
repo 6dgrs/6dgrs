@@ -1,777 +1,186 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f4f1ff" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="6dgrs" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="application-name" content="6dgrs" />
-    <title>6dgrs - Trusted global social travel</title>
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./assets/logo-icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./assets/logo-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=96" />
-  </head>
-  <body>
-    <main class="phone-shell" aria-label="6dgrs mobile app prototype">
-      <div class="status-glow"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#FAF8F5" />
+  <meta name="description" content="Discover friends-of-friends when you travel through mutual connections that make meeting feel more natural, relevant and accountable." />
+  <title>6dgrs — Your trusted network, wherever you go</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
+    <nav class="nav shell" aria-label="Main navigation">
+      <a class="brand" href="#top" aria-label="6dgrs home">6dgrs<span class="brand-dot">.</span></a>
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+        <span></span><span></span>
+      </button>
+      <div class="nav-links" id="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#safety">Safety</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <a class="button button-small nav-cta" href="#beta" data-beta-cta>Join the beta <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
 
-      <section class="screen screen-welcome active" id="welcome" data-screen="welcome">
-        <div class="pixel-haze"></div>
-        <div class="onboarding-brand"><strong>6dgrs</strong></div>
-        <div class="welcome-hero-card">
-          <h1>Meet through people you trust</h1>
-          <p>Meet trusted people around the world through friends-of-friends, mutual connections, and small plans.</p>
+  <main id="main">
+    <section class="hero section shell" aria-labelledby="hero-title">
+      <div class="hero-copy reveal">
+        <p class="eyebrow"><span class="status-dot"></span> Private beta · London & beyond</p>
+        <h1 id="hero-title">Never start from zero in a new place.</h1>
+        <p class="hero-lede">6dgrs connects you with trusted friends-of-friends around the world, helping every journey begin with a familiar connection.</p>
+        <div class="button-row">
+          <a class="button" href="#beta" data-beta-cta>Join the beta <span aria-hidden="true">↗</span></a>
+          <a class="button button-secondary" href="#how">How it works <span aria-hidden="true">↓</span></a>
         </div>
-        <div class="welcome-actions" id="welcomeAuth">
-          <div class="auth-input phone-auth international-phone-auth">
-            <button type="button" class="country-code-button" data-country-picker aria-expanded="false" aria-controls="countryCodeMenu"><span data-country-flag>🇬🇧</span><strong data-country-code>+44</strong></button>
-            <input type="tel" id="signupPhoneNumber" inputmode="tel" autocomplete="tel-national" placeholder="Phone number" aria-label="Phone number" />
-            <button type="button" data-next="onboarding-intro" data-phone-continue aria-label="Continue with phone">Continue</button>
-            <div class="country-code-menu" id="countryCodeMenu" hidden>
-              <input type="search" id="countryCodeSearch" placeholder="Search country" aria-label="Search country code" />
-              <div class="country-code-options" id="countryCodeOptions"></div>
+        <p class="microcopy">Early access on iOS · Android waitlist available</p>
+      </div>
+
+      <div class="hero-visual reveal" aria-label="6dgrs product preview">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="connection-pill pill-left"><span class="mini-avatar avatar-maya">M</span><span><strong>Maya</strong><small>2nd degree · Lisbon</small></span></div>
+        <div class="connection-pill pill-right"><span class="mini-avatar avatar-leo">L</span><span><strong>Leo</strong><small>Through Amara</small></span></div>
+        <div class="phone phone-main">
+          <div class="phone-top"><span>9:41</span><span class="island"></span><span>⌁</span></div>
+          <div class="app-head"><span class="app-mark">6°</span><button aria-label="Open profile">IO</button></div>
+          <div class="app-greeting"><small>Good morning</small><h2>Where will your network take you?</h2></div>
+          <div class="map-card">
+            <div class="map-lines" aria-hidden="true">
+              <svg viewBox="0 0 320 190" role="img" aria-label="Network connections between London, Lisbon, Accra and New York">
+                <path d="M38 52 C100 8 145 88 180 58 S250 18 286 46" />
+                <path d="M48 142 C112 168 125 95 180 108 S242 164 284 130" />
+                <path d="M38 52 C88 98 128 92 180 108" />
+                <path d="M180 58 C198 74 197 91 180 108" />
+              </svg>
             </div>
+            <span class="node node-a"><b>IO</b><i>London</i></span>
+            <span class="node node-b"><b>MA</b><i>Lisbon</i></span>
+            <span class="node node-c"><b>DK</b><i>Accra</i></span>
+            <span class="node node-d"><b>LE</b><i>New York</i></span>
+            <span class="degree-badge">2°</span>
           </div>
-          <div class="auth-provider-row">
-            <button class="auth-button provider-button" data-next="onboarding-intro"><span class="icon apple-icon"></span>Continue with Apple</button>
-            <button class="auth-button provider-button" data-next="onboarding-intro"><span class="icon google-icon"></span>Continue with Google</button>
+          <div class="upcoming-head"><div><small>Your next trip</small><strong>Lisbon</strong></div><span>18–24 Sep</span></div>
+          <div class="mutual-card"><div class="avatar-stack"><span>MA</span><span>JD</span><span>+4</span></div><div><strong>6 trusted connections</strong><small>2 people overlap with your trip</small></div><span class="chevron">›</span></div>
+          <div class="app-tabs"><span class="active">⌂<small>Home</small></span><span>◎<small>Network</small></span><span>◇<small>Trips</small></span><span>◌<small>Plans</small></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="6dgrs trust principles">
+      <div class="shell trust-items">
+        <span><i>◎</i> Friends-of-friends</span>
+        <span><i>⌁</i> Mutual context</span>
+        <span><i>✓</i> Real-life verification</span>
+        <span><i>◈</i> Privacy by design</span>
+      </div>
+    </section>
+
+    <section class="section problem shell" id="story">
+      <div class="section-intro reveal">
+        <p class="eyebrow">The idea</p>
+        <h2>The world isn’t full of strangers.<br />Your connections are simply invisible.</h2>
+        <p>Travelling somewhere new can feel exciting and unfamiliar. But someone you trust already knows someone there. 6dgrs makes that human path visible.</p>
+      </div>
+      <div class="degrees-stage reveal" aria-label="Six degrees of connection illustration">
+        <div class="degree-copy"><span class="degree-number">6°</span><strong>Six degrees<br />of connection</strong><p>One trusted introduction can make an unfamiliar place feel closer.</p></div>
+        <div class="network-visual" aria-hidden="true">
+          <svg viewBox="0 0 700 330">
+            <path class="network-path p1" d="M75 165 C155 55 225 85 285 145 S430 235 505 158 S595 72 638 127" />
+            <path class="network-path p2" d="M75 165 C165 245 225 246 285 145" />
+            <path class="network-path p3" d="M285 145 C365 36 433 51 505 158" />
+          </svg>
+          <span class="network-node n1"><b>You</b></span><span class="network-node n2 peach"><b>Amara</b><small>Friend</small></span><span class="network-node n3 blue"><b>Daniel</b><small>Mutual</small></span><span class="network-node n4"><b>Maya</b><small>Lisbon</small></span><span class="network-node n5 small-node">+3</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section how-section" id="how">
+      <div class="shell">
+        <div class="section-intro centred reveal"><p class="eyebrow">How it works</p><h2>A trusted path from here to there.</h2><p>Build from people you genuinely know, then let your network travel with you.</p></div>
+        <ol class="steps">
+          <li class="reveal"><span class="step-num">01</span><div class="step-icon">◯</div><h3>Create your profile</h3><p>Share who you are and how you like to travel.</p></li>
+          <li class="reveal"><span class="step-num">02</span><div class="step-icon">⌁</div><h3>Build your network</h3><p>Add people you know and trust in real life.</p></li>
+          <li class="reveal"><span class="step-num">03</span><div class="step-icon">◇</div><h3>Add your trips</h3><p>Tell your network where you’re heading next.</p></li>
+          <li class="reveal"><span class="step-num">04</span><div class="step-icon">◎</div><h3>Discover mutuals</h3><p>See relevant friends-of-friends at your destination.</p></li>
+          <li class="reveal"><span class="step-num">05</span><div class="step-icon">↗</div><h3>Meet in real life</h3><p>Connect with context, choice and confidence.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section features shell" id="features">
+      <div class="section-intro reveal"><p class="eyebrow">Inside 6dgrs</p><h2>Your world, connected.</h2><p>A small set of thoughtful tools designed to turn trusted networks into real-world possibility.</p></div>
+      <article class="feature-row reveal">
+        <div class="feature-copy"><span class="feature-index">01 · Your network</span><h3>See the human path between you.</h3><p>Discover friends-of-friends with the relationship context kept visible—not anonymous recommendations or follower counts.</p><ul><li>Clear degrees of connection</li><li>Mutual friends shown upfront</li><li>Relevant people in each city</li></ul></div>
+        <div class="feature-canvas network-card-ui">
+          <div class="ui-top"><div><small>Your network</small><strong>48 trusted connections</strong></div><button>2°</button></div>
+          <div class="network-rings"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span><span class="person me">You</span><span class="person pa">AK</span><span class="person pb">MR</span><span class="person pc">DS</span><span class="person pd">JL</span><span class="person pe">+8</span></div>
+          <div class="context-card"><span class="mini-avatar avatar-maya">M</span><div><strong>Maya in Lisbon</strong><small>You’re connected through Amara and Daniel</small></div><span>2°</span></div>
+        </div>
+      </article>
+
+      <article class="feature-row reverse reveal">
+        <div class="feature-copy"><span class="feature-index">02 · Your trips</span><h3>Know who’s there before you arrive.</h3><p>Add an upcoming trip and see the connections, overlaps and possibilities already waiting in your network.</p><ul><li>Upcoming destinations</li><li>Overlapping travel dates</li><li>People nearby, with context</li></ul></div>
+        <div class="feature-canvas trips-ui">
+          <div class="trip-main"><small>UPCOMING TRIP</small><span class="trip-date">18–24<br /><b>SEP</b></span><h4>Lisbon</h4><p>Portugal · 6 days</p><div class="trip-line"></div><div class="trip-stat"><span><b>6</b><small>connections</small></span><span><b>2</b><small>overlaps</small></span><span><b>3</b><small>plans</small></span></div></div>
+          <div class="overlap-card"><div class="avatar-stack"><span>MA</span><span>JD</span></div><div><strong>You overlap in Lisbon</strong><small>20–22 September</small></div></div>
+        </div>
+      </article>
+
+      <div class="feature-grid">
+        <article class="feature-small reveal"><div class="small-copy"><span class="feature-index">03 · Trusted plans</span><h3>Make plans with purpose.</h3><p>Join small group activities with people connected through mutual friends.</p></div><div class="plan-card"><span class="plan-tag">4 people · 2° network</span><div class="plan-art">☼</div><h4>Supper in Alfama</h4><p>Friday · 19:30</p><div class="plan-people"><div class="avatar-stack"><span>MA</span><span>JD</span><span>+2</span></div><button>View plan</button></div></div></article>
+        <article class="feature-small verification reveal"><div class="small-copy"><span class="feature-index">04 · Verification</span><h3>Trust is built, not claimed.</h3><p>QR verification, vouching and clear privacy controls keep the network accountable.</p></div><div class="verify-card"><div class="qr" aria-label="Example verification QR code"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><span class="verified-badge">✓ Verified in person</span><h4>Amara Okafor</h4><p>Verified with Daniel · 12 Jul 2026</p></div></div></article>
+      </div>
+    </section>
+
+    <section class="section safety-section" id="safety">
+      <div class="shell safety-grid">
+        <div class="safety-copy reveal"><p class="eyebrow">Safety by design</p><h2>Not strangers.<br />Not followers.<br /><span>Trusted connections.</span></h2><p>6dgrs starts with context. You decide what to share, who can find you and whether to connect. Every introduction carries a visible human path.</p><a class="text-link" href="#faq">Read about safety <span>→</span></a></div>
+        <div class="safety-cards">
+          <article class="safety-card reveal"><span class="safety-icon">⌁</span><div><h3>Mutual context</h3><p>Always see why a person is visible and who connects you.</p></div></article>
+          <article class="safety-card reveal"><span class="safety-icon">✓</span><div><h3>Meaningful verification</h3><p>Specific signals, including QR checks and real-life vouches.</p></div></article>
+          <article class="safety-card reveal"><span class="safety-icon">◈</span><div><h3>You stay in control</h3><p>Stable privacy, reporting and blocking tools whenever you need them.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section beta-section shell" id="beta">
+      <div class="beta-card reveal">
+        <div class="beta-orbit one"></div><div class="beta-orbit two"></div>
+        <div class="beta-content"><p class="eyebrow light">Private beta</p><h2>Help build the future<br />of social travel.</h2><p>Join a small early community helping shape a more trusted way to travel. Tally will guide you through a short application, and we’ll share thoughtful launch updates—nothing noisy.</p>
+          <div class="beta-actions">
+            <a class="button beta-primary" href="#beta" data-beta-cta>Join the beta <span aria-hidden="true">↗</span></a>
+            <a class="button beta-secondary" href="#beta" data-beta-cta>Get early access <span aria-hidden="true">↗</span></a>
           </div>
-          <button class="text-link" data-next="onboarding-intro">Continue with Email</button>
-          <button type="button" class="primary-button welcome-create" data-next="onboarding-intro">Create My Network</button>
-          <p class="terms">By continuing you agree to our Terms of Service and Privacy Policy.</p>
-          <button class="signin-button" data-next="home" data-sign-in>Already have an account? Sign In</button>
+          <p class="beta-note">A short application · Early access on iOS · Android waitlist available</p>
         </div>
-      </section>
+        <div class="beta-network" aria-hidden="true"><span class="bn bn1">IO</span><span class="bn bn2">AK</span><span class="bn bn3">MA</span><span class="bn bn4">+1</span><svg viewBox="0 0 320 320"><path d="M47 170 C96 78 164 78 219 128 S257 218 205 247"/><path d="M47 170 C91 225 136 258 205 247"/><path d="M219 128 C278 101 292 149 273 196"/></svg></div>
+      </div>
+    </section>
 
-      <section class="screen screen-welcome screen-onboarding-intro" id="onboarding-intro" data-screen="onboarding-intro">
-        <div class="pixel-haze"></div>
-        <div class="onboarding-brand"><strong>6dgrs</strong></div>
-        <div class="onboarding-shell" id="welcomeCarousel">
-          <div class="onboarding-track" id="onboardingTrack">
-            <article class="onboarding-slide">
-              <div class="onboarding-visual trusted-path-preview story-unlock">
-                <div class="mini-profile-card you-card"><span>You</span></div>
-                <b></b>
-                <div class="mini-profile-card trusted-node"><span>Lily</span><em>Trusted Friend</em></div>
-                <b></b>
-                <div class="mini-profile-card unlock-node"><span>Emma</span><em>Mutual unlocked</em></div>
-                <div class="blurred-branch unlock-branch"><span>Maya</span><span>Ari</span><span>Sofia</span></div>
-              </div>
-              <h1>Start with Trusted Friends</h1>
-              <p>Add people you genuinely know and trust. Each Trusted Friend unlocks part of their network.</p>
-            </article>
-            <article class="onboarding-slide">
-              <div class="onboarding-visual intro-request-preview story-intro">
-                <div class="mini-person-card profile-preview-card"><i></i><div><strong>Emma Laurent</strong><span>Mutual via Lily</span><button type="button">Request Intro</button></div></div>
-                <div class="intro-flow-line"><span>Request Introduction</span></div>
-                <div class="mini-chat-card">
-                  <strong>Intro Request</strong>
-                  <span>Hugo → Emma via Lily</span>
-                  <div><button>Introduce</button><button>Reply</button><button>Not Right Now</button></div>
-                </div>
-              </div>
-              <h1>Request warm introductions</h1>
-              <p>Meet through people you both know instead of messaging complete strangers.</p>
-            </article>
-            <article class="onboarding-slide">
-              <div class="onboarding-visual trusted-plans-onboarding-preview story-plans">
-                <div class="plan-signal-row"><span>Trusted network</span><i></i><span>Open plan</span></div>
-                <article class="plan-card onboarding-plan-card">
-                  <div class="avatar" style="background:linear-gradient(145deg, #ffbfa3,#a79cff)"></div>
-                  <div>
-                    <h3>Coffee in Shoreditch</h3>
-                    <div class="plan-status-line"><span class="trust-badge">Hosted by Amara</span><span class="trust-badge plan-state">Open to Join</span></div>
-                    <p>Shoreditch · Sat, 2:00 PM</p>
-                    <div class="plan-meta"><span>3/6 attending</span><span>Mutual connections</span></div>
-                    <button type="button">Request to Join</button>
-                  </div>
-                </article>
-                <div class="plan-join-flow"><span>Request sent</span><span>Host approves</span><span>Plan chat opens</span></div>
-              </div>
-              <h1>Join Trusted Plans</h1>
-              <p>See coffees, dinners, hikes, events and meetups shared across your trusted network. Trusted Plans help people meet with real-world context instead of complete strangers.</p>
-            </article>
-            <article class="onboarding-slide">
-              <div class="onboarding-visual qr-meetup-preview status-change-preview">
-                <div class="mini-person-card connected-card"><i></i><div><strong>Emma Laurent</strong><span>Connected</span></div></div>
-                <div class="mini-qr-person"><strong>Hugo's Personal Key</strong><img class="mini-qr-code" src="./assets/personal-key-qr.png" alt="6dgrs Personal Key QR preview" /></div>
-                <div class="scan-flow-line"><span>Scan Meetup QR</span></div>
-                <div class="confirm-chip">Meetup Confirmed</div>
-                <div class="mini-person-card met-card"><i></i><div><strong>Emma Laurent</strong><span>Met</span></div></div>
-              </div>
-              <h1>Meet in real life</h1>
-              <p>Real-world interactions strengthen trust. Meetups create verified shared experiences.</p>
-            </article>
-            <article class="onboarding-slide">
-              <div class="onboarding-visual trust-growth-preview story-growth">
-                <div class="mini-progress"><span>Connected</span><span>Met</span><span>Vouched</span><span>Trusted Friend</span></div>
-                <div class="mini-branch active-branch"><strong>Emma</strong><em>Jonas · Mary · Sofia unlocked</em></div>
-                <div class="mini-city-row"><span>Jonas</span><span>Mary</span><span>Sofia</span></div>
-              </div>
-              <h1>Met → Vouched → Trusted</h1>
-              <p>Trust grows over time. Stronger relationships unlock more meaningful networks.</p>
-            </article>
-            <article class="onboarding-slide">
-              <div class="onboarding-visual city-map-preview story-city">
-                <div class="mini-map-field">
-                  <span class="city-dot london">London</span>
-                  <span class="city-dot barcelona">Barcelona</span>
-                  <span class="city-dot lisbon">Lisbon</span>
-                  <i class="city-route"></i>
-                  <div class="map-person moving-person">Lily</div>
-                </div>
-                <div class="trip-added-card">Trip added · Barcelona · 15–20 Aug</div>
-                <div class="mini-branch active-branch arrived-person"><strong>Barcelona Hub</strong><em>New trusted activity appears</em></div>
-              </div>
-              <h1>City Hubs follow people</h1>
-              <p>City Hubs reflect where your network actually is. They update as people travel and add trips.</p>
-            </article>
-          </div>
-          <div class="onboarding-controls">
-            <div class="onboarding-dots" id="onboardingDots" aria-label="Onboarding progress"></div>
-            <div class="onboarding-nav-row">
-              <button type="button" class="onboarding-arrow" data-onboarding-prev aria-label="Previous onboarding screen">←</button>
-              <button type="button" class="onboarding-next" data-onboarding-next>Next</button>
-              <button type="button" class="onboarding-arrow" data-onboarding-skip aria-label="Skip onboarding">Skip</button>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section class="screen onboarding" id="basics" data-screen="basics">
-        <div class="scroll-area with-cta">
-          <header class="page-header">
-            <p class="eyebrow">Step 1</p>
-            <h1>The Basics</h1>
-            <p>Start with the details that make introductions feel human and contextual.</p>
-          </header>
-          <div class="form-stack">
-            <label>Full Name<input type="text" placeholder="e.g. Emma Laurent" /></label>
-            <label>Age<input type="number" placeholder="e.g. 28" /></label>
-            <label>Gender <span>(optional)</span><select id="basicGender"><option value="">Select gender</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>
-            <label class="conditional-field" id="basicGenderSelfDescribe" hidden>Self-describe <span>(optional)</span><input type="text" placeholder="Add your gender" /></label>
-            <label>Current City<input type="text" placeholder="e.g. Oslo" /></label>
-            <label>Home City<input type="text" placeholder="e.g. London" /></label>
-          </div>
-          <div class="select-group single-select" data-group="visibility">
-            <p class="section-label">Profile Visibility</p>
-            <button class="option-card selected" aria-pressed="true">Trusted Network<span>Trusted Connections and eligible Mutuals</span></button>
-            <button class="option-card" aria-pressed="false">Trusted Connections<span>Trusted Friends and confirmed Met connections</span></button>
-          </div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-next="profile-setup">Continue</button></div>
-      </section>
+    <section class="section faq shell" id="faq">
+      <div class="section-intro reveal"><p class="eyebrow">Questions, answered</p><h2>Good to know.</h2></div>
+      <div class="faq-list">
+        <details class="reveal"><summary>What is 6dgrs?<span></span></summary><p>6dgrs is a trusted social travel network that helps you discover friends-of-friends around the world. It makes the human path to a new person visible, so meeting can feel more natural, relevant and accountable.</p></details>
+        <details class="reveal"><summary>How are connections discovered?<span></span></summary><p>Your network grows through people you genuinely know. When you add a trip, 6dgrs can surface relevant friends-of-friends at your destination and show the mutual connection between you.</p></details>
+        <details class="reveal"><summary>Why is this different from existing social apps?<span></span></summary><p>6dgrs is built around relationship context, not followers, endless feeds or random discovery. The product is designed to support thoughtful introductions and useful real-world connection.</p></details>
+        <details class="reveal"><summary>Is 6dgrs safe?<span></span></summary><p>No app can promise complete safety. 6dgrs is designed to reduce uncertainty through mutual context, specific verification signals, privacy choices, reporting and blocking. You always decide whether to connect.</p></details>
+        <details class="reveal"><summary>Who is it for?<span></span></summary><p>For curious people who travel, live between cities or want to feel less disconnected somewhere new—and who value quality, context and genuine relationships over audience size.</p></details>
+        <details class="reveal"><summary>When will the beta launch?<span></span></summary><p>The first private beta will begin on iOS when the build is ready, with a small London-centred community. You can join now for early access or choose the Android waitlist.</p></details>
+      </div>
+    </section>
+  </main>
 
-      <section class="screen onboarding" id="profile-setup" data-screen="profile-setup">
-        <div class="scroll-area with-cta">
-          <header class="page-header">
-            <p class="eyebrow">Steps 2-5</p>
-            <h1>Build Your Signal</h1>
-            <p>Photos, story, personality, and interests for trusted social travel.</p>
-          </header>
-
-          <section class="content-section">
-            <h2>Profile Photos</h2>
-            <div class="upload-main">
-              <div class="avatar-preview">EL</div>
-              <div><strong>Profile photo</strong><span>Large primary identity image</span></div>
-            </div>
-            <div class="upload-cover">Cover image</div>
-            <div class="photo-carousel" aria-label="Lifestyle travel photos">
-              <button class="photo-tile">Add 1</button><button class="photo-tile">Add 2</button><button class="photo-tile">Add 3</button>
-              <button class="photo-tile">Add 4</button>
-            </div>
-          </section>
-
-          <section class="content-section">
-            <h2>Bio</h2>
-            <div class="prompt-card"><span>Lately I’ve been drawn to...</span><textarea placeholder="Quiet wine bars, sunrise walks and great design hotels"></textarea></div>
-            <div class="prompt-card"><span>A trip I still think about...</span><textarea placeholder="Kyoto in autumn with friends of friends"></textarea></div>
-            <div class="prompt-card"><span>I’m always up for...</span><textarea placeholder="Warm introductions and hidden local rituals"></textarea></div>
-          </section>
-
-          <section class="content-section">
-            <h2>Your Travel Persona</h2>
-            <div class="chip-cloud selectable" data-max-selected="3">
-              <button>Explorer</button><button>Foodie</button><button>Nightlife</button><button>Outdoors</button>
-              <button>Luxury Travel</button><button>Hidden Gems</button><button>Digital Nomad</button><button>Art & Culture</button><button>Coffee Spots</button>
-            </div>
-          </section>
-
-          <section class="content-section">
-            <h2>Interests</h2>
-            <div class="chip-cloud selectable" data-max-selected="3">
-              <button>Design hotels</button><button>Jazz bars</button><button>Galleries</button><button>Rooftops</button>
-              <button>Wellness</button><button>Supper clubs</button><button>Photography</button><button>Architecture</button>
-              <button>Beach towns</button><button>Slow travel</button>
-            </div>
-          </section>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-next="trip">Continue</button></div>
-      </section>
-
-      <section class="screen onboarding" id="trip" data-screen="trip">
-        <div class="scroll-area with-cta">
-          <header class="page-header">
-            <p class="eyebrow">Step 6</p>
-            <h1>Upcoming Trips</h1>
-            <p>Add where you are going next and decide how open your trip feels.</p>
-          </header>
-          <div class="glass-card trip-card">
-            <label>Destination<input type="text" placeholder="Barcelona, Spain" /></label>
-            <div class="date-row">
-              <label>Start Date<input type="date" id="tripStartDate" /></label>
-              <label>End Date<input type="date" id="tripEndDate" /></label>
-            </div>
-            <label>Visibility<select id="tripVisibility"><option>Hidden</option><option>Trusted Connections</option><option selected>Trusted Network</option><option>Broader Network</option></select></label>
-            <label>Trip Purpose<select id="tripPurpose"><option>Leisure</option><option>Work</option><option>Visiting Friends</option><option>Event</option><option>Other</option></select></label>
-            <label class="conditional-field" id="tripPurposeDetail" hidden><span id="tripPurposeDetailLabel">What brings you here?</span><input type="text" id="tripReason" placeholder="Wedding, festival, birthday trip" /></label>
-            <details class="trip-advanced-privacy">
-              <summary>Custom visibility</summary>
-              <button type="button" class="privacy-extra-row" data-privacy-extra aria-pressed="false">Hide this trip from specific people<span></span></button>
-              <div class="hidden-people-picker chip-cloud selectable" data-hidden-people-picker>
-                <button type="button">Lily Chen</button><button type="button">Emma Laurent</button><button type="button">Theo Jensen</button><button type="button">Sofia Marin</button>
-              </div>
-            </details>
-            <div class="toggle-pair exclusive-toggles">
-              <button class="toggle-card active">Open to Meetups<span></span></button>
-              <button class="toggle-card">Just browsing<span></span></button>
-            </div>
-          </div>
-        </div>
-        <div class="sticky-cta trip-actions"><button class="primary-button" data-trip-save>Save Trip</button><button class="secondary-button" data-trip-skip>I'll do it later</button></div>
-      </section>
-
-      <section class="screen onboarding trusted-screen" id="trusted" data-screen="trusted">
-        <div class="scroll-area with-cta">
-          <header class="page-header light">
-            <p class="eyebrow">Step 7</p>
-            <h1>Trusted Connections</h1>
-            <p>6dgrs grows through real-world trust.</p>
-          </header>
-          <p class="qr-instruction" id="trustedInstruction">Start with 6 Trusted Friends. Unlock up to 12 as real-world trust grows.</p>
-          <div class="trust-cap-card">
-            <strong>Trusted Friend slots</strong>
-            <span id="trustedSlotCopy">6 slots available now · unlock up to 12 through verified meetups, vouches, and hosted plans.</span>
-          </div>
-          <div class="identity-card">
-            <div class="identity-top"><div class="avatar-preview small">EL</div><div><strong>Your Personal Key</strong><span>@emmaaround</span></div></div>
-            <div class="real-qr asset-qr" aria-label="Scannable QR code"><img src="./assets/personal-key-qr.png" alt="6dgrs Personal Key QR code" /></div>
-            <div class="trust-id">Trust ID 6D-OSL-2048</div>
-          </div>
-          <div class="action-list">
-            <button class="wide-action">Scan Trusted Friend's QR</button>
-            <button class="wide-action">Share Invite Link</button>
-            <button class="wide-action">Import Contacts</button>
-          </div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" id="trustedCta" data-next="privacy">Continue</button></div>
-      </section>
-
-      <section class="screen onboarding" id="privacy" data-screen="privacy">
-        <div class="scroll-area with-cta">
-          <header class="page-header">
-            <p class="eyebrow">Step 8</p>
-            <h1>Privacy</h1>
-            <p>Make the network feel open enough to explore and private enough to trust.</p>
-          </header>
-          <div class="settings-list privacy-settings">
-            <button class="setting-card active" data-privacy-mode="Trusted Connections" aria-pressed="true">Trusted Connections<span>Trusted Friends and Met people</span></button>
-            <button class="setting-card" data-privacy-mode="Trusted Network" aria-pressed="false">Trusted Network<span>Includes eligible Mutuals</span></button>
-            <button class="setting-card" data-privacy-mode="Broader Network" aria-pressed="false">Broader Network<span>Wider trust graph discovery</span></button>
-            <button class="setting-card" data-privacy-mode="Hidden" aria-pressed="false">Hidden<span>Only visible to me</span></button>
-          </div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-next="qr-reveal">Generate QR</button></div>
-      </section>
-
-      <section class="screen qr-reveal" id="qr-reveal" data-screen="qr-reveal">
-        <div class="reveal-content">
-          <p class="eyebrow">Step 9</p>
-          <h1>Your Key Is Live</h1>
-          <div class="identity-card reveal">
-            <div class="real-qr asset-qr"><img src="./assets/personal-key-qr.png" alt="6dgrs Personal Key QR code" /></div>
-            <strong>6dgrs Personal Key</strong>
-            <span>Ready for trusted real-world adds</span>
-          </div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-next="home">Enter 6dgrs</button></div>
-      </section>
-
-      <section class="screen app-screen" id="home" data-screen="home">
-        <div class="scroll-area app-scroll">
-          <header class="home-header">
-            <div class="brand-small">6dgrs</div>
-            <div class="header-actions"><button data-next="trip">Add Trip</button><button class="icon-button" data-next="notifications" aria-label="Notifications"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button><button class="icon-button" data-qr-shortcut>QR</button></div>
-          </header>
-          <label class="search-bar"><span></span><input id="homeSearch" placeholder="Search city or country" /></label>
-          <div class="filter-row"><button class="active" data-home-filter="all">All</button><button data-home-filter="in-town">In Town</button><button data-home-filter="locals">Locals</button><button data-home-filter="same">Same Dates</button></div>
-          <section class="content-section"><div class="section-heading people-heading"><div><h2 id="homePeopleTitle">Trusted People Nearby</h2><label class="date-range-pill" id="homePeopleDates"><select id="homeTripSelect" aria-label="Choose trip dates"></select></label></div><button data-next="nearby-people">View all</button></div><div class="people-stack" id="nearbyPeople"></div></section>
-          <section class="content-section trusted-plans-preview">
-            <div class="section-heading"><h2>Trusted Plans Near You</h2><button data-next="trusted-plans">View all</button></div>
-            <div class="plan-preview-stack" id="homePlans"></div>
-            <button class="soft-action" data-next="create-plan">Create Trusted Plan</button>
-          </section>
-          <section class="content-section"><h2>Visiting Soon</h2><div class="mini-card-row"><button class="city-mini-card" data-city-mutual="Barcelona">Barcelona<span>12 mutual paths</span></button><button class="city-mini-card" data-city-mutual="Tokyo">Tokyo<span>8 trusted hubs</span></button></div></section>
-          <section class="content-section"><h2>Recently Unlocked Networks</h2><div class="unlock-strip"><span>Oslo</span><span>London</span><span>Paris</span></div></section>
-          <section class="content-section"><div class="section-heading"><div><h2>Suggested for you</h2></div><button data-next="suggested-connections">View all</button></div><div class="people-stack" id="suggestedPeople"></div></section>
-          <section class="content-section"><div class="section-heading"><div><h2>Around Your Network</h2></div></div><div class="mini-card-row network-movement-row" id="networkMovement"></div></section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="nearby-people" data-screen="nearby-people">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1 id="nearbyPeoplePageTitle">Trusted People Nearby</h1><p id="nearbyPeoplePageCopy">People relevant to your selected trip and filter.</p></div>
-          </header>
-          <div class="people-stack" id="nearbyPeopleAll"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="suggested-connections" data-screen="suggested-connections">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1>Suggested Introductions</h1><p>Ranked by shared style, trips, mutual paths, plans, and recent trusted activity.</p></div>
-          </header>
-          <div class="people-stack" id="suggestedPeopleAll"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="trusted-plans" data-screen="trusted-plans">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1>Trusted Plans Near You</h1><p>Discover plans you can request to join.</p></div>
-            <button class="small-pill" data-next="create-plan">Create</button>
-          </header>
-          <div class="people-stack plan-list" id="trustedPlansList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="my-plans" data-screen="my-plans">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1>My Plans</h1></div>
-            <button class="small-pill" data-next="create-plan">Create</button>
-          </header>
-          <div class="tabs plan-tabs my-plan-tabs"><button class="active" data-plan-filter="hosting">Hosting</button><button data-plan-filter="attending">Attending</button><button data-plan-filter="pending">Pending</button><button data-plan-filter="past">Past</button></div>
-          <div class="people-stack plan-list" id="myPlansList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="create-plan" data-screen="create-plan">
-        <div class="scroll-area with-cta">
-          <header class="page-header"><p class="eyebrow">Trusted Plans</p><h1>Create Trusted Plan</h1><p>Host something small, private, and capped at 6 people.</p></header>
-          <div class="form-card">
-            <label>Plan title<input placeholder="e.g. Coffee in Shoreditch" /></label>
-            <label>Location<input placeholder="Shoreditch, London" /></label>
-            <div class="form-grid two"><label>Date<input type="date" /></label><label>Time<input type="time" /></label></div>
-            <label>Maximum number of people <span>(max 6)</span><input type="number" min="2" max="6" placeholder="4" /></label>
-            <label>Visibility setting<select><option>Trusted Connections</option><option>Trusted Network</option><option>Broader Network</option><option>Invite link only</option></select></label>
-          </div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-publish-plan>Publish Plan</button></div>
-      </section>
-
-      <section class="screen app-screen" id="plan-detail" data-screen="plan-detail">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><button class="small-pill" data-next="trusted-plans">Back</button><button class="small-pill" id="planDetailRequests" data-next="plan-requests">Requests</button></header>
-          <section class="plan-hero">
-            <span class="trust-badge" id="planDetailBadge">Discoverable</span>
-            <h1>Coffee in Shoreditch</h1>
-            <p>Saturday, 2:00 PM · Shoreditch House cafe</p>
-            <div class="host-line"><div class="avatar"></div><div><strong>Hosted by Amara</strong><span>You -> Lily -> Amara</span></div></div>
-          </section>
-          <section class="content-section"><h2>Plan Details</h2><p class="about-copy">A small coffee plan for trusted mutuals nearby. Attending creates a Met connection only; wider networks stay locked unless people later become Trusted Friends.</p><div class="plan-stats"><span>3 spots left</span><span>3 joined</span><span>Max 6</span></div></section>
-          <section class="content-section" id="planAttendees"><h2>Attendees</h2><div class="participant-row"><span>Amara</span><span class="trust-badge">Host · 2°</span></div><div class="participant-row"><span>Lily</span><span>Trusted Friend</span></div><div class="participant-row"><span>Theo</span><span>Met only</span></div></section>
-          <section class="content-section plan-join-note" id="planJoinNote"><h2>Message to host (optional)</h2><p class="section-note">Include a message with your join request.</p><textarea id="planJoinMessage" placeholder="Would love to join if there’s space."></textarea></section>
-          <div class="action-grid" id="planDetailActions"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="edit-plan" data-screen="edit-plan">
-        <div class="scroll-area with-cta">
-          <header class="network-header">
-            <div><h1>Edit Plan</h1><p>Manage the plan you are hosting.</p></div>
-            <button class="plan-request-bell edit-plan-request-bell" data-next="plan-requests" aria-label="3 pending requests"><svg class="bell-symbol" aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg><span class="bell-count">3</span></button>
-          </header>
-          <section class="plan-management-hub">
-            <div>
-              <strong>Coffee in Shoreditch</strong>
-              <span>Saturday · 2:30 PM · Shoreditch</span>
-            </div>
-            <div class="hub-actions single-action">
-              <button type="button" data-next="plan-chat" data-plan-status="hosting" class="chat-cta">Open Chat <span>3</span></button>
-            </div>
-          </section>
-          <div class="form-card">
-            <label>Title<input placeholder="Coffee in Shoreditch" /></label>
-            <div class="form-grid two"><label>Date<input type="date" /></label><label>Time<input type="time" /></label></div>
-            <label>Venue / location<input placeholder="Shoreditch House cafe" /></label>
-            <label>Description<textarea placeholder="A small coffee plan for trusted mutuals nearby. Keep it warm, low-key, and easy to join."></textarea></label>
-            <label>Max attendees<select><option selected>6 people</option><option>5 people</option><option>4 people</option><option>3 people</option></select></label>
-            <label>Visibility<select><option>Trusted Connections</option><option selected>Trusted Network</option><option>Broader Network</option><option>Invite link only</option></select></label>
-            <label>Who can join<select><option>Trusted Connections</option><option selected>Trusted Network</option><option>Broader Network</option><option>Invite link only</option></select></label>
-          </div>
-          <section class="content-section">
-            <h2>Attendees</h2>
-            <div class="participant-row"><span>You</span><span class="trust-badge">Host</span></div>
-            <div class="participant-row"><span>Lily</span><span class="trust-badge">Accepted</span><button class="quiet-danger">Remove</button></div>
-            <div class="participant-row"><span>Theo</span><span class="trust-badge">Accepted</span><button class="quiet-danger">Remove</button></div>
-            <div class="participant-row"><span>Amara</span><span class="trust-badge">Accepted</span><button class="quiet-danger">Remove</button></div>
-          </section>
-          <div class="action-grid edit-plan-actions">
-            <button class="secondary-button" type="button" data-save-plan>Save Changes</button>
-            <button class="quiet-danger" type="button" data-cancel-hosted-plan>Cancel Plan</button>
-          </div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="plan-requests" data-screen="plan-requests">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Plan Requests</h1></div><button class="small-pill" data-next="plan-detail">Back</button></header>
-          <div class="people-stack" id="planRequestsList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="plan-chat" data-screen="plan-chat">
-        <div class="scroll-area app-scroll chat-detail">
-          <header class="chat-top"><div><strong>Coffee in Shoreditch</strong><span>Saturday · 2:00 PM · Shoreditch</span></div><div class="chat-quick-actions"><button class="small-pill" data-next="edit-plan" data-plan-status="hosting">Edit Plan</button><button class="small-pill" data-next="plan-requests">Requests</button><button class="small-pill" data-next="chats" data-chat-mode="plan-share">Share</button></div></header>
-          <div class="plan-reminder">
-            <p id="planChatStatus"><span class="trust-badge relationship-badge">Private Plan Chat</span><small>Hosted by Hugo · 4 attendees</small></p>
-            <div class="participant-strip"><div><button type="button">Hugo (Host)</button><button data-next="profile" data-profile-name="Lily Chen">Lily</button><button data-next="profile" data-profile-name="Theo Jensen">Theo</button><button data-next="profile" data-profile-name="Amara Okoye">Amara</button></div></div>
-            <div class="plan-messages">
-              <div class="message-row other">Amara: I booked a small table near the window.</div>
-              <div class="message-row mine">Perfect. I’ll be there just before 2.</div>
-              <div class="message-row other">Lily: Bringing Sofia too, she knows Amara from the Oslo hub.</div>
-            </div>
-            <div class="chat-input" id="planChatComposer"><input placeholder="Message the plan group" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="screen app-screen" id="city-mutuals" data-screen="city-mutuals">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1 id="cityMutualTitle">Barcelona</h1><p id="cityMutualCopy">People you can reach through trusted paths.</p></div>
-            <button class="small-pill" data-next="home">Back</button>
-          </header>
-          <section class="content-section"><h2>Mutual Paths</h2><div class="people-stack" id="cityMutualPeople"></div></section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="network-list" data-screen="network-list">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1>Network</h1></div>
-            <button class="small-pill" data-add-friends>Add Trusted</button>
-          </header>
-          <div class="view-toggle"><button class="active" data-next="network-list">List</button><button data-next="network-map">Map</button></div>
-          <section class="trust-system-card">
-            <div><strong>Trusted Friends</strong><span id="networkTrustedSlotCopy">4/6 launch slots used · cap 12</span></div>
-            <div><strong>Unlocks</strong><span>+2 after 2 verified meetups · +1 for hosting · +1 per trusted vouch</span></div>
-          </section>
-          <label class="search-bar network-search"><span></span><input id="networkSearch" placeholder="Search name or city" /></label>
-          <div class="chip-cloud network-filter-chips primary-network-filters">
-            <button class="selected" data-network-filter="trusted">Trusted</button>
-            <button data-network-filter="mutuals">Mutuals</button>
-            <button data-network-filter="nearby">Nearby</button>
-            <button data-network-filter="travelling">Travelling</button>
-            <button data-network-filter="met">Met</button>
-          </div>
-          <section class="content-section"><h2>Trusted Friends</h2><div class="people-stack network-cards"></div></section>
-          <section class="content-section"><h2>People You've Met</h2><p class="section-note">Verified real-world meetups create Met paths and curated previews, not automatic Trusted Friend access.</p><div class="people-stack met-cards"></div></section>
-          <section class="content-section"><h2>Mutual Connections</h2><p class="section-note">Friends-of-friends visible through a trust path. Request intros before messaging.</p><div class="people-stack trusted-cards"></div></section>
-          <section class="content-section"><h2>Extended Network</h2><p class="section-note">2nd to 6th Degree previews reveal gradually through intros, plans, vouches and verified meetups.</p><div class="people-stack third-degree-cards"></div></section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen map-screen" id="network-map" data-screen="network-map">
-        <div class="city-sky">
-          <header class="network-header map-top">
-            <div><h1>Trust Paths</h1><p>Explore how your network branches and reconnects.</p></div>
-            <div class="view-toggle compact"><button data-next="network-list">List</button><button class="active">Map</button></div>
-          </header>
-          <div class="world-lines"></div>
-          <div class="connection-line l1"></div><div class="connection-line l2"></div><div class="connection-line l3"></div>
-          <div class="global-network-map" id="globalNetworkMap" aria-label="Global trust map"></div>
-          <section class="network-graph-card" id="networkGraphCard" aria-live="polite"></section>
-          <div class="map-bottom glass-card">
-            <div><strong id="mapTrustedSlotCount">4/6</strong><span>Trusted Friends</span></div><div><strong id="mapMetCount">6</strong><span>Met paths</span></div><div><strong id="mapTrustedCap">12</strong><span>Max cap</span></div>
-            <button data-next="network-list">Open list view</button>
-          </div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="request-intro" data-screen="request-intro">
-        <div class="scroll-area with-cta">
-          <header class="page-header"><h1 id="introTitle">Request intro to Emma via Lily</h1><p class="path-line" id="introPathLine">Connected via Lily</p></header>
-          <div class="select-group single-select intro-methods"><button class="option-card selected" aria-pressed="true" data-intro-method="mutual">Via Mutual Friend <em>Recommended</em></button><button class="option-card" aria-pressed="false" data-intro-method="direct">Direct Request</button></div>
-          <div class="recipient-card" id="introRecipient"><span>Send Lily a note</span><strong>Lily Chen</strong></div>
-          <label class="message-box">Message<textarea id="introMessage" placeholder="Hey Lily - would love an intro to Emma if it feels right. Looks like we both have similar interests and may be in Barcelona at the same time."></textarea></label>
-          <p class="subtle-note" id="introMethodNote">This lands as a normal chat with Lily, not a formal approval request.</p>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-send-intro>Send Request</button></div>
-      </section>
-
-      <section class="screen app-screen" id="chats" data-screen="chats">
-        <div class="scroll-area app-scroll">
-          <header class="page-header compact-header"><h1>Chats</h1><p id="chatContextCopy">Trusted conversations only.</p></header>
-          <div class="tabs chat-tabs"><button class="active" data-chat-filter="all">All</button><button data-chat-filter="unread">Unread</button><button data-chat-filter="trusted">Trusted</button><button data-chat-filter="plans">Plans</button><button data-chat-filter="archived">Archived</button></div>
-          <div class="chat-list"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="chat-detail" data-screen="chat-detail">
-        <div class="chat-detail">
-          <header class="chat-top"><div class="avatar-img"></div><div><strong>Hugo & Emma</strong><span>Introduced by Lily · Not yet Met</span></div></header>
-          <div class="messages"><p class="bubble theirs">Lily mentioned you love quiet design bars. I have one in mind for Friday.</p><p class="bubble mine">Perfect. I am in Barcelona from Thursday and would love that.</p></div>
-          <button class="meetup-button" data-next="verify">Confirm Meetup</button>
-          <div class="composer"><input placeholder="Message Emma" /><button type="button" class="photo-upload-button" aria-label="Add photo"></button><button aria-label="Send message">➤</button></div>
-        </div>
-      </section>
-
-      <section class="screen app-screen" id="verify" data-screen="verify">
-        <div class="scroll-area with-cta">
-          <header class="page-header"><h1>Did you meet Emma?</h1><p>Verification can upgrade a one-to-one relationship to Trusted Friend when both people accept.</p></header>
-          <div class="select-group single-select verify-methods"><button class="option-card selected" aria-pressed="true" data-verify-method="qr">QR Scan</button><button class="option-card" aria-pressed="false" data-verify-method="location">Same Location</button><button class="option-card" aria-pressed="false" data-verify-method="mutual">Mutual Confirmation</button></div>
-          <div id="verificationPanel" class="verification-panel"></div>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-complete-verification>Complete Verification</button></div>
-      </section>
-
-      <section class="screen unlocked-screen" id="unlocked" data-screen="unlocked">
-        <div class="unlock-visual"><span></span><span></span><span></span></div>
-        <div class="unlock-content">
-          <h1>Meetup Confirmed</h1>
-          <p>Emma is now Met. You can see a curated preview; her full branch opens only if you both become Trusted Friends.</p>
-          <div class="new-people"><div><span>MB</span></div><div><span>AR</span></div><div><span>NK</span></div><div><span>SR</span></div><div><span>JO</span></div></div>
-          <div class="reach-card"><strong>Meetup Recorded</strong><span>Emma is now Met. Met creates a real trust path with curated previews; Trusted Friend unlocks the wider branch.</span></div>
-          <div class="gain-grid"><div><strong>Met</strong><span>New status</span></div><div><strong>Locked</strong><span>Wider branch</span></div><div><strong>12</strong><span>Max cap</span></div></div>
-        </div>
-        <div class="sticky-cta dual"><button class="primary-button" data-next="network-map">Explore New Connections</button><button class="secondary-button" data-next="home">Continue Exploring</button></div>
-      </section>
-
-      <section class="screen app-screen profile-screen" id="my-profile" data-screen="my-profile">
-        <div class="scroll-area app-scroll">
-          <div class="cover personal-cover"></div>
-          <button class="profile-gear" type="button" data-profile-menu aria-label="Open profile menu"></button>
-          <div class="profile-menu" id="profileMenu">
-            <button data-next="notifications">Notifications</button>
-            <button data-next="connection-requests">Requests</button>
-            <button data-next="settings">Settings</button>
-            <button data-next="safety-centre">Safety Centre</button>
-            <button data-next="how-works">How 6dgrs Works</button>
-            <button type="button" data-open-feedback>Send Feedback</button>
-          </div>
-          <section class="profile-head">
-            <div class="profile-avatar">IO</div><div class="verified">Verified</div>
-            <h1>Ifunanya Okafor</h1><p>@ifunanya</p>
-            <div class="profile-actions"><button data-next="edit-profile">Edit Profile</button><button data-qr-shortcut>Personal Key</button></div>
-          </section>
-          <div class="tabs profile-tabs"><button class="active" data-profile-tab="about">About</button><button data-profile-tab="trips">Trips</button><button data-profile-tab="plans">Plans</button><button data-profile-tab="trust">Trust</button></div>
-          <section class="profile-tab-panel active" data-profile-panel="about">
-            <section class="content-section"><h2>About</h2><p class="about-copy">Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals, design hotels, gallery afternoons, and trusted local plans.</p><div class="profile-meta-grid"><span>Current city<strong>Tokyo</strong></span><span>Home city<strong>London</strong></span><span>Trust ID<strong>6D-8492-LDN</strong></span></div></section>
-            <section class="content-section"><h2>Travel Personality</h2><div class="chip-cloud static"><span>Explorer</span><span>Foodie</span><span>Art & Culture</span><span>Hidden Gems</span></div><h2>Interests</h2><div class="chip-cloud static"><span>Design hotels</span><span>Jazz bars</span><span>Photography</span><span>Slow travel</span></div></section>
-            <section class="content-section"><h2>Photos</h2><div class="profile-photo-grid"><button type="button" aria-label="Profile gallery photo 1"></button><button type="button" aria-label="Profile gallery photo 2"></button><button type="button" aria-label="Profile gallery photo 3"></button><button type="button" aria-label="Profile gallery photo 4"></button></div></section>
-          </section>
-          <section class="profile-tab-panel" data-profile-panel="trips">
-            <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="all-trips">Manage trips</button></div><div class="profile-carousel"><div class="trip-row"><strong>Barcelona</strong><span>Jun 12-16 · Trusted Network</span></div><div class="trip-row"><strong>Paris</strong><span>Jul 04-07 · Broader Network</span></div><div class="trip-row"><strong>Lisbon</strong><span>Aug 18-22 · Trusted Network</span></div></div></section>
-          </section>
-          <section class="profile-tab-panel" data-profile-panel="plans">
-            <section class="content-section"><div class="section-heading"><h2>Plans</h2><button data-next="my-plans">Manage plans</button></div><div class="profile-carousel"><div class="trip-row"><strong>Hosting</strong><span>Coffee in Shoreditch · Saturday, 2:00 PM</span></div><div class="trip-row"><strong>Attending</strong><span>Gallery visit in Mayfair · Sunday, 11:30 AM</span></div><div class="trip-row"><strong>Pending</strong><span>Jazz night in Dalston · awaiting host</span></div><div class="trip-row muted"><strong>Past</strong><span>Design stores in Marylebone · Met created</span></div></div></section>
-          </section>
-          <section class="profile-tab-panel" data-profile-panel="trust">
-            <section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>18 countries visited · 11 trusted hubs · 4 Trusted Friends · 6 Met</p><button data-next="network-map">Open Network Explorer</button></div></section>
-            <section class="content-section"><h2>Trusted Stats</h2><div class="profile-meta-grid"><span>Trusted Friends<strong>4/6</strong></span><span>Met<strong>6</strong></span><span>Vouches<strong>2</strong></span></div></section>
-            <section class="content-section"><h2>Introductions Made</h2><div class="profile-carousel"><div class="trip-row"><strong>Hugo ↔ Emma</strong><span>Introduced via Lily · Barcelona · November 2026 · Connected</span></div><div class="trip-row"><strong>Maya ↔ Theo</strong><span>Introduced through Coffee in Shoreditch · Met in person</span></div></div></section>
-            <section class="content-section"><h2>Vouched By</h2><div class="testimonial-row"><div>Lily<span>"Always makes people feel safe."</span></div><div>Theo<span>"Great at thoughtful introductions."</span></div></div></section>
-            <button class="instagram-lock connected unlocked" type="button" data-instagram-profile="ifunanya" data-trusted-instagram="true"><strong>Instagram Connected</strong><span>Travel photos visible to trusted connections only.</span><small>@ifunanya opens in Instagram.</small></button>
-          </section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="all-trips" data-screen="all-trips">
-        <div class="scroll-area app-scroll">
-          <header class="network-header">
-            <div><h1>My Trips</h1><p id="allTripsCopy">Trips you've added in chronological order.</p></div>
-            <button class="small-pill" data-next="trip">Add Trip</button>
-          </header>
-          <div class="people-stack" id="allTripsList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="person-trips" data-screen="person-trips">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Emma Laurent's Trips</h1><p>Visible trips based on trust, mutuals, and same-date overlap.</p></div></header>
-          <div id="personTripsList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="person-plans" data-screen="person-plans">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Emma Laurent's Plans</h1><p>Plans Emma is hosting, attending, or has completed.</p></div></header>
-          <div class="tabs plan-tabs"><button class="active" data-plan-filter="hosting">Hosting</button><button data-plan-filter="attending">Attending</button><button data-plan-filter="past">Past</button></div>
-          <div class="people-stack plan-list" id="personPlansList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="edit-profile" data-screen="edit-profile">
-        <div class="scroll-area with-cta">
-          <header class="page-header"><p class="eyebrow">My Profile</p><h1>Edit Profile</h1><p>Keep your trusted travel signal clear and current.</p></header>
-          <section class="content-section"><h2>Images</h2><div class="media-editor-list"><div class="media-editor-row"><span>Profile photo</span><div><button type="button" data-media-action="replace">Replace</button><button type="button" data-media-action="remove">Remove</button></div></div><div class="media-editor-row"><span>Cover photo</span><div><button type="button" data-media-action="replace">Replace</button><button type="button" data-media-action="remove">Remove</button></div></div><div class="media-editor-row"><span>Gallery images</span><div><button type="button" data-media-action="reorder">Reorder</button><button type="button" data-media-action="replace">Replace</button></div></div></div></section>
-          <div class="form-card">
-            <label>Name<input placeholder="Ifunanya Okafor" /></label>
-            <label>Username<input placeholder="@ifunanya" /></label>
-            <label>Bio<textarea placeholder="Warm-intro traveller based in Tokyo, with London as home, looking for thoughtful city rituals and trusted local plans."></textarea></label>
-            <label>Gender <span>(optional)</span><select id="editProfileGender"><option value="">Select gender</option><option selected>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>
-            <label class="conditional-field" id="editProfileGenderSelfDescribe" hidden>Self-describe <span>(optional)</span><input placeholder="Add your gender" /></label>
-            <label>Lately I’ve been drawn to<textarea placeholder="Quiet wine bars, sunrise walks and great design hotels."></textarea></label>
-            <label>The kind of plans I say yes to<textarea placeholder="Long lunches, gallery afternoons and low-key dinners."></textarea></label>
-            <label>My ideal local host knows<textarea placeholder="Where to go when nowhere obvious feels right."></textarea></label>
-            <div class="form-grid two"><label>Current City<input placeholder="Tokyo" /></label><label>Home City<input placeholder="London" /></label></div>
-            <label>Instagram connection<select><option>Connected · trusted only</option><option>Disconnect Instagram</option><option>Visible after accepted intro</option></select></label>
-            <label>Profile visibility<select><option>Hidden</option><option>Trusted Connections</option><option selected>Trusted Network</option><option>Broader Network</option></select></label>
-          </div>
-          <section class="content-section"><h2>Travel Personality</h2><div class="chip-cloud selectable"><button class="selected">Explorer</button><button>Foodie</button><button class="selected">Hidden Gems</button><button>Digital Nomad</button><button>Luxury Travel</button></div><h2>Interests</h2><div class="chip-cloud selectable"><button class="selected">Design hotels</button><button>Jazz bars</button><button class="selected">Photography</button><button>Architecture</button><button>Slow travel</button></div></section>
-        </div>
-        <div class="sticky-cta"><button class="primary-button" data-next="my-profile">Save Changes</button></div>
-      </section>
-
-      <section class="screen app-screen" id="settings" data-screen="settings">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Settings</h1><p>Account, privacy, safety, and app controls.</p></div><button class="small-pill" data-next="my-profile">Back</button></header>
-          <section class="settings-section"><h2>Account</h2><button data-settings-detail="phone">Phone number<span data-setting-value="phone">+44 ••• ••• 2841</span></button><button data-settings-detail="email">Email<span data-setting-value="email">ifunanya@example.com · verified</span></button><button data-settings-detail="security">Password & security<span data-setting-value="security">2FA enabled</span></button><button data-settings-detail="connected">Connected accounts<span data-setting-value="connected">Instagram connected</span></button></section>
-          <section class="settings-section"><h2>Privacy</h2><button data-privacy-setting="currentCity">Current city visibility<span data-setting-value="currentCity">Trusted Network</span></button><button data-privacy-setting="trips">Trip visibility default<span data-setting-value="trips">Trusted Network</span></button><button data-privacy-setting="travelOverlaps">Travel overlap suggestions<span data-setting-value="travelOverlaps">Trusted Network</span></button><button data-privacy-setting="intros">Who can request intros<span data-setting-value="intros">Trusted Network</span></button><button data-privacy-setting="instagram">Who can view Instagram<span data-setting-value="instagram">Trusted Connections</span></button><button data-privacy-setting="profile">Profile visibility<span data-setting-value="profile">Trusted Network</span></button></section>
-          <section class="settings-section notification-settings"><h2>Notifications</h2><button data-notification-setting="introRequests" aria-pressed="true">Intro requests<span data-setting-value="introRequests">On</span><i aria-hidden="true"></i></button><button data-notification-setting="acceptedRequests" aria-pressed="true">Accepted requests<span data-setting-value="acceptedRequests">On</span><i aria-hidden="true"></i></button><button data-notification-setting="tripOverlaps" aria-pressed="true">Trip overlaps<span data-setting-value="tripOverlaps">On</span><i aria-hidden="true"></i></button><button data-notification-setting="trustedPlans" aria-pressed="true">Trusted plans<span data-setting-value="trustedPlans">On</span><i aria-hidden="true"></i></button><button data-notification-setting="networkUnlocked" aria-pressed="true">Network unlocked<span data-setting-value="networkUnlocked">On</span><i aria-hidden="true"></i></button><button data-notification-setting="chatMessages" aria-pressed="true">Chat messages<span data-setting-value="chatMessages">On</span><i aria-hidden="true"></i></button></section>
-          <section class="settings-section"><h2>Safety</h2><button data-settings-detail="blocked">Blocked users<span data-setting-value="blocked">2 blocked</span></button><button data-settings-detail="reports">Report history<span data-setting-value="reports">3 submitted</span></button><button data-next="safety-centre">Meeting safety guidance<span>Open</span></button><button data-settings-detail="verification">Verification settings<span data-setting-value="verification">QR + location</span></button></section>
-          <section class="settings-section"><h2>App</h2><button data-settings-detail="appearance">Appearance<span data-setting-value="appearance">Light</span></button><button data-settings-detail="help">Help centre<span>FAQ + support</span></button><button type="button" data-open-feedback>Send Feedback<span>For beta testing</span></button><button data-settings-detail="terms">Terms<span>Read</span></button><button data-settings-detail="privacyPolicy">Privacy policy<span>Read</span></button><button data-settings-detail="developer">Developer Mode<span>Internal testing</span></button><button class="danger-text" data-delete-account>Delete account<span>Requires confirmation</span></button></section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="settings-detail" data-screen="settings-detail">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1 id="settingsDetailTitle">Settings</h1><p id="settingsDetailCopy">Manage this setting.</p></div></header>
-          <div id="settingsDetailContent" class="settings-detail-content"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="notifications" data-screen="notifications">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Notifications</h1><p>Trust activity that needs your attention.</p></div><div class="header-actions compact-actions"><button class="small-pill quiet-pill" type="button" data-clear-all-notifications>Clear all</button><button class="small-pill" data-next="connection-requests">Requests</button></div></header>
-          <div class="notification-list"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="connection-requests" data-screen="connection-requests">
-        <div class="scroll-area app-scroll">
-          <header class="network-header"><div><h1>Requests</h1></div><button class="small-pill" data-next="notifications">Alerts</button></header>
-          <div class="tabs request-tabs"><button class="active" data-request-filter="intro">Intro Requests</button><button data-request-filter="met">Met Upgrades</button><button data-request-filter="sent">Sent</button><button data-request-filter="meetups">Meetups</button></div>
-          <div class="people-stack" id="connectionRequestList"></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="safety-centre" data-screen="safety-centre">
-        <div class="scroll-area app-scroll">
-          <header class="page-header"><p class="eyebrow">Safety Centre</p><h1>Meet With Trust</h1><p>6dgrs is built around mutual paths, controlled visibility, and verified real-world interactions.</p></header>
-          <section class="safety-card"><h2>How 6dgrs keeps trust</h2><p>People are discovered through Trusted Friends and mutual paths, not open public feeds.</p></section>
-          <section class="safety-card"><h2>Meetup safety tips</h2><p>Meet in public places, keep plans small, share context with trusted friends, and only unlock networks after a real meetup.</p></section>
-          <section class="safety-card"><h2>Verification methods</h2><p>Use QR scan, same-location checks, or timed mutual confirmation to prove a meetup happened in person.</p></section>
-          <section class="safety-card"><h2>Reporting and blocking</h2><p>Reports stay private. Blocking removes the person from your visible trusted graph.</p></section>
-          <section class="safety-card"><h2>After a verified meetup</h2><p>Meetups create Met first. Wider network unlock only happens when both people accept a Trusted Friend relationship and a slot is available.</p></section>
-          <div class="action-grid"><button>Report a user</button><button>Block someone</button><button>Read safety guidance</button><button>Contact us</button></div>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen" id="how-works" data-screen="how-works">
-        <div class="scroll-area app-scroll">
-          <header class="page-header"><p class="eyebrow">Guide</p><h1>How 6dgrs Works</h1><p>Build trusted routes through real people - locally and around the world.</p></header>
-          <section class="safety-card guide-intro-card">
-            <h2>Grow through trust, not numbers</h2>
-            <p>6dgrs helps you grow your world through trusted introductions, verified meetups, and shared plans.</p>
-            <div class="guide-badges"><span>Trusted friendships</span><span>Warm intros</span><span>Real meetups</span><span>City routes</span></div>
-            <small>Every connection starts with someone you know and expands outward through real relationships.</small>
-          </section>
-          <section class="safety-card guide-route-card"><h2>Trust Graph</h2><p>Your graph is the living map of who you can reach right now. When a Trusted Friend is removed, dependent branches lock. When a path reconnects or someone becomes Trusted, the graph opens again.</p><div class="definition-bubbles"><span>Active paths</span><span>Locked branches</span><span>Archived history</span></div></section>
-          <section class="safety-card guide-route-card"><h2>Trust Paths</h2><div class="trust-progression"><span>You</span><span>Lily</span><span>Emma</span></div><p>A path shows how someone is socially connected to you. Active paths unlock introductions and discovery. Archived paths preserve history but no longer unlock access.</p></section>
-
-          <h2 class="guide-section-title">The Network</h2>
-          <details class="safety-card guide-card" open><summary><span>Trusted Friend</span><em>Direct trusted circle</em></summary><p>Someone you know personally or have built trust with over time. Trusted Friends unlock network visibility, introduce you to people they know, vouch for you, and join plans with you.</p><div class="definition-bubbles"><span>Limited slots</span><span>Strongest connection</span><span>Unlocks routes</span></div></details>
-          <details class="safety-card guide-card"><summary><span>Mutual Connection</span><em>You -> Lily -> Emma</em></summary><p>Someone connected to you through an active trust path, such as a Trusted Friend or someone you have Met. Mutuals can be discovered and introduced to, but direct messaging waits until an introduction or real-world meetup is confirmed.</p></details>
-          <details class="safety-card guide-card"><summary><span>Degree</span><em>How close someone is</em></summary><div class="definition-grid"><span><strong>1st</strong>Trusted Friend</span><span><strong>2nd</strong>Friend of a Trusted Friend</span><span><strong>3rd</strong>Friend of a Mutual Connection</span><span><strong>4th</strong>Multiple trust paths</span><span><strong>5th</strong>Extended Network</span><span><strong>6th</strong>Distant Network Connection</span></div><p>The further out the degree, the lighter the visibility and the more curated the access.</p></details>
-          <details class="safety-card guide-card"><summary><span>Met</span><em>Confirmed in real life</em></summary><p>Someone you have met through a plan, intro, QR, or location confirmation. Met connections are unlimited, can be messaged, and can open curated branch previews, but they do not use a Trusted Friend slot or automatically unlock the full branch.</p></details>
-          <details class="safety-card guide-card"><summary><span>Vouched</span><em>Recommended by trust</em></summary><p>A personal signal from someone in your trusted circle. Vouches can make a person easier to discover or introduce, but they are still separate from becoming a Trusted Friend.</p></details>
-          <details class="safety-card guide-card"><summary><span>Archived Path</span><em>History, not access</em></summary><p>A relationship or route you had before, but no longer actively unlocks. Past chats, plans and meetup history remain available, while wider network access closes.</p></details>
-          <details class="safety-card guide-card"><summary><span>Locked Network</span><em>No active path</em></summary><p>A person, city hub, plan, or branch that cannot currently be accessed because the trust path is missing or broken. Locked branches can show hints, but not full profiles, direct messaging, private trips, or full branch access.</p></details>
-
-          <h2 class="guide-section-title">Trust Progression</h2>
-          <section class="safety-card"><div class="trust-progression"><span>Connected</span><span>Shared Plan</span><span>Met</span><span>Vouched</span><span>Trusted Friend</span></div><div class="definition-grid"><span><strong>Connected</strong>Visible through a trust path</span><span><strong>Shared Plan</strong>Same trusted plan context</span><span><strong>Met</strong>Two-sided real-life confirmation</span><span><strong>Vouched</strong>Recommended by someone trusted</span></div><p>Being in the same plan does not automatically make someone Met or Trusted. Trust builds through real interactions over time.</p></section>
-
-          <h2 class="guide-section-title">How Networks Unlock</h2>
-          <section class="safety-card guide-route-card"><h2>Meeting unlocks connection. Trust unlocks access.</h2><div class="trust-progression"><span>You</span><span>Lily</span><span>Emma</span><span>Emma's world</span></div><p>Request Introduction is for someone you have not met yet. After a real meetup is confirmed, that person becomes Met first. If trust builds and you both confirm the relationship, they can become a Trusted Friend and open a wider branch.</p></section>
-          <section class="safety-card guide-route-card"><h2>Meetup Confirmations</h2><p>Confirming a real-world meetup moves a person from Connected or Shared Plan to Met. Met gives shared history and curated previews; Trusted Friend opens the wider branch.</p><div class="definition-bubbles"><span>Connected → Met</span><span>Shared Plan → Met</span><span>Trusted → New branch</span></div></section>
-
-          <h2 class="guide-section-title">City Hubs</h2>
-          <section class="safety-card"><h2>Where your trusted network is active</h2><p>City Hubs unlock through trips, Trusted Friends who live there, verified meetups, hosted plans, mutual connections, and repeated network activity.</p><div class="guide-badges"><span>Barcelona</span><span>Oslo</span><span>London</span><span>Lisbon</span></div></section>
-
-          <h2 class="guide-section-title">Personal Key</h2>
-          <section class="safety-card"><h2>Verify real-world trust</h2><p>Your Personal Key helps verify meetups, add someone in person, confirm trusted introductions, and move trust forward because the connection happened in real life.</p><div class="definition-bubbles"><span>QR verify</span><span>Meetup proof</span><span>Trusted add</span></div></section>
-
-          <h2 class="guide-section-title">Trusted Plans</h2>
-          <details class="safety-card guide-card" open><summary><span>Trusted Plan</span><em>Small plans in your network</em></summary><p>Coffee, gallery visits, drinks, dinners, walks, or local activities. People request to join before entering the group chat, and hosts choose who joins, max group size, and visibility.</p></details>
-          <details class="safety-card guide-card"><summary><span>Introductions</span><em>Warm connection route</em></summary><p>An intro request asks a mutual friend to connect two people if it feels right. Once introduced, the two people can chat directly and confirm a meetup when they meet in real life.</p></details>
-          <section class="safety-card"><h2>Plan States</h2><div class="definition-grid"><span><strong>Hosting</strong>Plans you created</span><span><strong>Attending</strong>Plans you joined</span><span><strong>Pending</strong>Waiting for host approval</span><span><strong>Past</strong>Archived chat history</span></div></section>
-
-          <h2 class="guide-section-title">Unlock More Slots</h2>
-          <section class="safety-card"><h2>Earn more Trusted Friend space</h2><p>You start with limited slots and unlock more through unique verified meetups, successful hosted plans, trusted vouches, and real-world trust activity. Repeating the same relationship does not create extra progression rewards.</p></section>
-
-          <h2 class="guide-section-title">Community Signals</h2>
-          <section class="safety-card"><div class="guide-badges guide-signal-badges"><span>Trusted Host</span><span>City Insider</span><span>Verified Meetup</span><span>Multi-City Connector</span><span>Well Connected</span></div></section>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-
-      <section class="screen app-screen profile-screen" id="profile" data-screen="profile">
-        <div class="scroll-area app-scroll">
-          <div class="cover"></div>
-          <section class="profile-head">
-            <div class="profile-avatar">EL</div><div class="verified">Verified</div>
-            <h1>Emma Laurent</h1><span class="trust-badge relationship-badge">Mutual via Lily</span><p>Currently in Oslo · Visible through Lily</p>
-            <div class="profile-actions"><button data-next="request-intro">Request Intro</button><button type="button" data-share-profile>Share Profile</button></div>
-          </section>
-          <section class="content-section"><h2>About</h2><p class="about-copy">Design-led traveler, weekend gallery wanderer, and believer in warm introductions over cold DMs.</p><div class="chip-cloud static"><span>Hidden Gems</span><span>Art & Culture</span><span>Coffee Spots</span><span>Luxury Travel</span></div></section>
-          <section class="content-section"><div class="section-heading"><h2>Upcoming Trips</h2><button data-next="person-trips">View all trips →</button></div><div class="profile-carousel discovery-trips"><div class="trip-row"><strong>Barcelona</strong><span>Jun 12-16 · Broader Network · same dates</span></div><div class="trip-row"><strong>Paris</strong><span>Jul 04-07 · Trusted Network</span></div></div></section>
-          <section class="content-section compact-plans-preview"><div class="section-heading"><div><h2>Plans</h2><span>2 active · 1 past</span></div><button data-next="person-plans">View all Plans →</button></div><div class="trip-row"><strong>☕ Hosting</strong><span>Gallery visit in Mayfair · Sunday 11:30am</span></div><div class="trip-row"><strong>🎨 Attending</strong><span>Coffee in Shoreditch · Saturday 2pm</span></div></section>
-          <section class="presence-card"><div class="presence-world"></div><div><h2>Global Presence</h2><p>14 countries visited · 9 trusted hubs</p><button data-next="network-map">Open Network Explorer</button></div></section>
-          <section class="content-section"><h2>Vouched By</h2><div class="testimonial-row"><div>Lily<span>"Thoughtful, kind, easy to meet."</span></div><div>Amara<span>"Always knows the place."</span></div></div></section>
-          <button class="instagram-lock locked" type="button" id="emmaInstagramCard" data-instagram-profile="emma.laurent" data-trusted-instagram="false"><strong>Instagram</strong><span id="emmaInstagramStatus">Connect as trusted contacts to view Emma's travel photos.</span><small id="emmaInstagramHint">Locked until a trusted connection is established.</small></button>
-        </div>
-        <nav class="bottom-nav"></nav>
-      </section>
-    </main>
-    <script src="./app.js?v=97"></script>
-  </body>
+  <footer class="footer">
+    <div class="shell footer-grid"><div><a class="brand footer-brand" href="#top">6dgrs<span class="brand-dot">.</span></a><p>Your trusted network,<br />wherever you go.</p></div><div class="footer-links"><div><strong>Explore</strong><a href="#how">How it works</a><a href="#features">Features</a><a href="#safety">Safety</a><a href="#faq">FAQ</a></div><div><strong>Company</strong><a href="mailto:hello@6dgrs.app">Contact</a><a href="#">Instagram</a><a href="#">LinkedIn</a></div><div><strong>Legal</strong><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Community guidelines</a></div></div></div>
+    <div class="shell footer-bottom"><span>© 2026 6dgrs. Made for the places in between.</span><a href="#top">Back to top ↑</a></div>
+  </footer>
+  <script src="app.js"></script>
+</body>
 </html>
