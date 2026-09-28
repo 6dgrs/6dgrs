@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#FAF8F5" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action https://tally.so; frame-ancestors 'none'" />
+  <meta name="description" content="Request private-beta access to 6dgrs." />
+  <title>Join 6dgrs</title>
+  <link rel="stylesheet" href="join.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="join-header">
+    <a href="../" aria-label="6dgrs home">
+      <img src="../assets/6dgrs_wordmark_black_transparent.png" alt="6dgrs." width="2048" height="682" />
+    </a>
+  </header>
+
+  <main id="main" class="join-main">
+    <section class="join-card" data-state="ordinary" hidden>
+      <p class="eyebrow">Private beta</p>
+      <h1>Join 6dgrs.</h1>
+      <p>6dgrs helps you discover people, places and Plans through people you already know and trust.</p>
+      <p>Access is currently limited while we build the first community thoughtfully.</p>
+      <a class="button" href="https://tally.so/r/J9x4Bd" rel="noopener noreferrer">Request beta access <span aria-hidden="true">↗</span></a>
+      <a class="text-link" href="../">Back to 6dgrs</a>
+    </section>
+
+    <section class="join-card" data-state="invitation" hidden>
+      <p class="eyebrow">Private Plan invitation</p>
+      <h1>You’ve been invited to a Plan on 6dgrs.</h1>
+      <p>Plan details stay private until you sign in and the invitation is securely redeemed in the app.</p>
+      <div class="actions">
+        <a class="button" data-open-app href="sixdgrs://join">Open in 6dgrs</a>
+        <a class="button button-secondary" href="https://tally.so/r/J9x4Bd" rel="noopener noreferrer">Request beta access</a>
+      </div>
+      <p class="fine-print">Don’t have the app yet? Request private-beta access. After installing and signing in, return to this invitation and tap Open in 6dgrs.</p>
+    </section>
+
+    <section class="join-card" data-state="unavailable" hidden>
+      <p class="eyebrow">Plan invitation</p>
+      <h1>This invitation can’t be opened.</h1>
+      <p>It may be invalid or incomplete. Ask the person who invited you to share a new link.</p>
+      <a class="button" href="../">Go to 6dgrs</a>
+    </section>
+
+    <noscript>
+      <section class="join-card">
+        <p class="eyebrow">Private beta</p>
+        <h1>Join 6dgrs.</h1>
+        <p>JavaScript is needed to open a private Plan invitation. You can still request beta access.</p>
+        <a class="button" href="https://tally.so/r/J9x4Bd" rel="noopener noreferrer">Request beta access</a>
+      </section>
+    </noscript>
+  </main>
+
+  <footer>
+    <span>© 2026 6dgrs.</span>
+    <nav aria-label="Legal"><a href="../privacy/">Privacy</a><a href="../terms/">Terms</a><a href="../safety/">Safety</a></nav>
+  </footer>
+  <script src="join.js"></script>
+</body>
+</html>

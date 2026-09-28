@@ -1,0 +1,37 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "99X548LRU4.app.6dgrs.mobile"
+        ],
+        "components": [
+          {
+            "/": "/join",
+            "?": {
+              "token": "*"
+            },
+            "comment": "Legacy query-token invitation handoff"
+          },
+          {
+            "/": "/join/",
+            "?": {
+              "token": "*"
+            },
+            "comment": "Legacy query-token invitation handoff with trailing slash"
+          },
+          {
+            "/": "/join",
+            "#": "token=*",
+            "comment": "Fragment-token invitation handoff"
+          },
+          {
+            "/": "/join/",
+            "#": "token=*",
+            "comment": "Fragment-token invitation handoff with trailing slash"
+          }
+        ]
+      }
+    ]
+  }
+}
